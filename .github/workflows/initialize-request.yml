@@ -1,0 +1,40 @@
+name: Initialize Request
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "Request title"
+        required: true
+        type: string
+      background:
+        description: "Markdown-enabled background (use ### or smaller headings)"
+        required: false
+        type: string
+      approach:
+        description: "Markdown-enabled approach (use ### or smaller headings)"
+        required: false
+        type: string
+      branch_name:
+        description: "Optional branch name override (without prefix)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  initialize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Initialize Request
+        uses: Rioto3/.github/.github/actions/create-request@main
+        with:
+          title: ${{ github.event.inputs.title }}
+          background: ${{ github.event.inputs.background }}
+          approach: ${{ github.event.inputs.approach }}
+          branch_name: ${{ github.event.inputs.branch_name }}
