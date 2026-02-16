@@ -16,25 +16,47 @@
 
 ## クイックスタート
 
-### 1. セットアップ
+### ローカル環境で実行（開発・テスト用）
 
 ```bash
-# 依存パッケージのインストール
-pip install requests beautifulsoup4 lxml pydantic
+# 1. 依存パッケージのインストール
+pip install uv
+uv sync
 
-# 動作確認（手動実行）
-make run
-```
+# 2. 自動実行の開始（15分間隔）
+make start
 
-### 2. 自動実行の開始
-
-```bash
-# cronジョブをインストール（15分間隔）
-make install-cron
-
-# 状態確認
+# 3. 状態確認
 make status
+
+# 4. 停止
+make stop
 ```
+
+### Docker環境で実行（本番運用推奨）
+
+```bash
+# 1. Dockerイメージをビルド
+make docker-build
+
+# 2. コンテナを起動（15分間隔で自動実行）
+make docker-start
+
+# 3. ログをリアルタイム確認
+make docker-logs
+
+# 4. コンテナの状態確認
+make docker-status
+
+# 5. コンテナを停止
+make docker-stop
+```
+
+**Docker環境の利点：**
+- 完全な環境再現性（OS、Python、依存関係すべて固定）
+- ホストシステムへの影響なし
+- デプロイが簡単（どこでも同じ環境）
+- 将来的な分析基盤との統合が容易
 
 ## データの利用
 
@@ -98,14 +120,26 @@ delta-station/
 
 ## 運用コマンド
 
+### ローカル実行コマンド
+
 | コマンド | 説明 |
 |---------|------|
-| `make run` | スクリプトを手動実行 |
-| `make install-cron` | 15分間隔の自動実行を開始 |
-| `make uninstall-cron` | 自動実行を停止 |
+| `make start` | 再起動（停止してから開始） |
+| `make run` | 15分間隔の自動実行を開始 |
+| `make stop` | 自動実行を停止 |
 | `make status` | 実行状態とログを確認 |
-| `make test` | スクレイピングテスト |
-| `make test-db` | データベース挿入テスト |
+
+### Docker実行コマンド
+
+| コマンド | 説明 |
+|---------|------|
+| `make docker-build` | Dockerイメージをビルド |
+| `make docker-start` | コンテナを起動（15分間隔で自動実行） |
+| `make docker-stop` | コンテナを停止 |
+| `make docker-restart` | コンテナを再起動 |
+| `make docker-logs` | ログをリアルタイム表示 |
+| `make docker-status` | コンテナの状態を確認 |
+| `make docker-clean` | コンテナ・イメージを完全削除 |
 
 ## データソース
 
