@@ -1,343 +1,252 @@
 #!/usr/bin/env python3
 """
-Delta地点 定点観測データ収集スクリプト（本番用）
+Delta地点 定点観測データ スクレイパー（本番用）
 
-15分間隔で実行され、観測データをスクレイピングしてデータベースに保存する。
-observed_atのUNIQUE制約により、データ未更新時は自動的にスキップされる。
+15分間隔で実行され、観測データをDBに保存し、画像をダウンロードする。
 """
 
 import logging
 import sqlite3
 import sys
-import re
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urljoin
 
 import requests
-from bs4 import BeautifulSoup
 
-# プロジェクトルートからの相対インポート
+# プロジェクトルートをパスに追加
 sys.path.insert(0, str(Path(__file__).parent))
+
 from models import LocationData, ObservationData, ScrapedRawData
 
+# ログ設定（ファイル出力）
+LOG_DIR = Path(__file__).parent.parent / "outputs"
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "scraper.log"
 
-def setup_logging(log_file: str = "outputs/scraper.log"):
-    """ログ設定（ファイル出力）"""
-    log_path = Path(log_file)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format='[%(asctime)s] %(levelname)s: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),
-            logging.StreamHandler()  # 標準出力にも出力
-        ]
-    )
-    return logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
-    """データベース管理クラス（本番用）"""
+    """データベース管理クラス"""
 
     def __init__(self, db_path: str = "outputs/database/delta_station.db"):
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path = Path(__file__).parent.parent / db_path
         self.conn: Optional[sqlite3.Connection] = None
 
     def initialize_database(self) -> bool:
-        """データベースを初期化（初回実行時のみ必要）"""
+        """データベースとテーブルを初期化"""
         try:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
             schema_path = Path(__file__).parent.parent / "database" / "schema.sql"
-            if not schema_path.exists():
-                raise FileNotFoundError(f"スキーマファイルが見つかりません: {schema_path}")
-
             with open(schema_path, 'r', encoding='utf-8') as f:
-                schema_sql = f.read()
+                schema = f.read()
 
-            self.conn = sqlite3.connect(str(self.db_path))
-            self.conn.execute("PRAGMA foreign_keys = ON")
-            self.conn.executescript(schema_sql)
-            self.conn.commit()
+            conn = sqlite3.connect(self.db_path)
+            conn.executescript(schema)
+            conn.commit()
+            conn.close()
+
+            logger.info("データベース初期化完了")
             return True
         except Exception as e:
-            if self.conn:
-                self.conn.close()
-            raise e
+            logger.error(f"データベース初期化失敗: {e}")
+            return False
 
     def connect(self) -> bool:
-        """既存データベースに接続"""
+        """データベースに接続"""
         try:
-            self.conn = sqlite3.connect(str(self.db_path))
-            self.conn.execute("PRAGMA foreign_keys = ON")
+            # DBファイルが存在しない、または空の場合は初期化
+            if not self.db_path.exists() or self.db_path.stat().st_size == 0:
+                logger.info("データベースが存在しないため、初期化します")
+                if not self.initialize_database():
+                    return False
+
+            self.conn = sqlite3.connect(self.db_path)
+            self.conn.row_factory = sqlite3.Row
+
+            # テーブルが存在するか確認
+            cursor = self.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='locations'"
+            )
+            if cursor.fetchone() is None:
+                logger.warning("テーブルが存在しないため、再初期化します")
+                self.conn.close()
+                self.conn = None
+                if not self.initialize_database():
+                    return False
+                self.conn = sqlite3.connect(self.db_path)
+                self.conn.row_factory = sqlite3.Row
+
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"データベース接続失敗: {e}")
             return False
 
-    def ensure_location(self, location: LocationData) -> bool:
-        """観測地点を確認・挿入（初回のみ）"""
+    def ensure_location(self, location: LocationData) -> Optional[int]:
+        """観測地点を確認・挿入し、location_idを返す"""
         try:
             cursor = self.conn.execute(
-                "SELECT id FROM locations WHERE id = ?",
-                (location.id,)
+                "SELECT id FROM locations WHERE location_name = ?",
+                (location.location_name,)
             )
-            if cursor.fetchone():
-                return True  # 既に存在
+            row = cursor.fetchone()
 
-            self.conn.execute(
-                """
-                INSERT INTO locations (id, location_name, location_address, source_url)
-                VALUES (?, ?, ?, ?)
-                """,
-                (location.id, location.location_name, location.location_address, location.source_url)
+            if row:
+                return row['id']
+
+            # 新規挿入
+            cursor = self.conn.execute(
+                """INSERT INTO locations (location_name, location_address, source_url)
+                   VALUES (?, ?, ?)""",
+                (location.location_name, location.location_address, location.source_url)
             )
             self.conn.commit()
-            return True
-        except Exception:
-            return False
+            logger.info(f"新規観測地点を登録: {location.location_name}")
+            return cursor.lastrowid
 
-    def insert_observation(self, observation: ObservationData) -> tuple[bool, str]:
-        """
-        観測データを挿入
+        except Exception as e:
+            logger.error(f"観測地点の確認・挿入に失敗: {e}")
+            return None
 
-        Returns:
-            (success: bool, message: str)
-            - (True, "inserted"): 新規データ挿入成功
-            - (True, "duplicate"): 既存データ（スキップ）
-            - (False, error_msg): エラー
-        """
+    def insert_observation(self, location_id: int, obs: ObservationData) -> bool:
+        """観測データを挿入"""
         try:
             self.conn.execute(
-                """
-                INSERT INTO observations (
+                """INSERT INTO observations (
                     location_id, observed_at, captured_at,
                     cumulative_rainfall, temperature, wind_speed,
                     road_temperature, road_condition,
                     image_filename, image_url
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    observation.location_id,
-                    observation.observed_at,
-                    observation.captured_at,
-                    observation.cumulative_rainfall,
-                    observation.temperature,
-                    observation.wind_speed,
-                    observation.road_temperature,
-                    observation.road_condition,
-                    observation.image_filename,
-                    observation.image_url
+                    location_id,
+                    obs.observed_at,
+                    obs.captured_at,
+                    obs.cumulative_rainfall,
+                    obs.temperature,
+                    obs.wind_speed,
+                    obs.road_temperature,
+                    obs.road_condition,
+                    obs.image_filename,
+                    obs.image_url
                 )
             )
             self.conn.commit()
-            return True, "inserted"
+            logger.info(f"新規データ挿入成功: {obs.observed_at}")
+            return True
+
         except sqlite3.IntegrityError as e:
-            if "UNIQUE constraint failed" in str(e):
-                return True, "duplicate"
-            return False, str(e)
+            if "UNIQUE constraint failed: observations.observed_at" in str(e):
+                logger.info(f"データ未更新（既存データ）: {obs.observed_at}")
+            else:
+                logger.warning(f"データ挿入時の整合性エラー: {e}")
+            return False
+
         except Exception as e:
-            return False, str(e)
+            logger.error(f"データ挿入失敗: {e}")
+            return False
 
     def close(self):
-        """データベース接続を閉じる"""
+        """データベース接続をクローズ"""
         if self.conn:
             self.conn.close()
 
 
-class DeltaStationScraper:
-    """Delta地点観測データスクレイパー（本番用）"""
+def download_image(image_url: str, save_path: Path) -> bool:
+    """画像をダウンロード"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(image_url, headers=headers, timeout=30)
+        response.raise_for_status()
 
-    def __init__(self, url: str, image_dir: str = "outputs/images"):
-        self.url = url
-        self.soup: Optional[BeautifulSoup] = None
-        self.image_dir = Path(image_dir)
-        self.image_dir.mkdir(parents=True, exist_ok=True)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(save_path, 'wb') as f:
+            f.write(response.content)
 
-    def fetch_html(self) -> bool:
-        """HTMLを取得してパース"""
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            response = requests.get(self.url, headers=headers, timeout=30)
-            response.raise_for_status()
-            response.encoding = response.apparent_encoding
-            self.soup = BeautifulSoup(response.text, 'lxml')
-            return True
-        except Exception:
-            return False
+        logger.info(f"画像ダウンロード成功: {save_path.name}")
+        return True
 
-    def scrape(self) -> Optional[ScrapedRawData]:
-        """データをスクレイピング"""
-        try:
-            data = {}
-
-            # 観測日時
-            text = self.soup.get_text()
-            match = re.search(r'観測日時[：:]\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})', text)
-            if match:
-                data['observed_at'] = match.group(1).strip()
-
-            # 撮影日時
-            match = re.search(r'撮影日時[：:]\s*(\d{2}/\d{2})\s+(\d{2}:\d{2})', text)
-            if match:
-                year = data['observed_at'][:4] if 'observed_at' in data else str(datetime.now().year)
-                month_day = match.group(1)
-                time = match.group(2)
-                data['captured_at'] = f"{year}-{month_day.replace('/', '-')} {time}"
-
-            # 住所
-            div = self.soup.find('div', class_='style3')
-            if div:
-                data['location_address'] = div.get_text().strip()
-
-            # 気象データ
-            tables = self.soup.find_all('table')
-            for table in tables:
-                rows = table.find_all('tr')
-                for row in rows:
-                    cols = row.find_all('td')
-                    if len(cols) == 2:
-                        label = cols[0].get_text().strip()
-                        value = cols[1].get_text().strip()
-
-                        if label == '観測地点':
-                            data['location_name'] = value
-                        elif label == '累加雨量':
-                            data['cumulative_rainfall'] = value
-                        elif label == '気温':
-                            data['temperature'] = value
-                        elif label == '風速':
-                            data['wind_speed'] = value
-                        elif label == '路面温度':
-                            data['road_temperature'] = value
-                        elif label == '路面状況':
-                            data['road_condition'] = value
-
-            # 画像URL
-            img_tag = self.soup.find('img', src=re.compile(r'DR-\d+-l\.jpg'))
-            if img_tag:
-                relative_url = img_tag['src']
-                data['image_url'] = urljoin(self.url, relative_url)
-
-            return ScrapedRawData(**data)
-        except Exception:
-            return None
-
-    def download_image(self, image_url: str, image_filename: str) -> bool:
-        """画像をダウンロードして保存"""
-        try:
-            image_path = self.image_dir / image_filename
-
-            # 既に存在する場合はスキップ
-            if image_path.exists():
-                return True
-
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            response = requests.get(image_url, headers=headers, timeout=30)
-            response.raise_for_status()
-
-            with open(image_path, 'wb') as f:
-                f.write(response.content)
-
-            return True
-        except Exception:
-            return False
+    except Exception as e:
+        logger.warning(f"画像ダウンロード失敗: {e}")
+        return False
 
 
 def main():
-    """メイン実行"""
-    logger = setup_logging()
-
+    """メイン処理"""
     logger.info("=" * 60)
-    logger.info("Delta地点 観測データ収集開始")
+    logger.info("Delta地点観測データ収集開始")
     logger.info("=" * 60)
 
-    # 観測地点データ（No.1: 作並宿）
+    # 観測地点情報
     location = LocationData(
-        id=1,
-        location_name="作並宿",
-        location_address="仙台市青葉区作並字神前西",
+        location_name="作並宿（チェーン着脱所）",
+        location_address="宮城県仙台市青葉区作並",
         source_url="http://www2.thr.mlit.go.jp/sendai/html/DR-74125.html"
     )
 
     # データベース接続
     db = DatabaseManager()
     if not db.connect():
-        # 初回実行時はデータベース初期化
-        logger.info("データベースを初期化します")
-        try:
-            db.initialize_database()
-            logger.info("✓ データベース初期化完了")
-        except Exception as e:
-            logger.error(f"✗ データベース初期化失敗: {e}")
-            return 1
+        logger.error("データベース接続失敗のため終了")
+        return 1
 
-    # 観測地点を確認・挿入
-    if not db.ensure_location(location):
-        logger.error("✗ 観測地点の確認・挿入に失敗")
+    # 観測地点の確認・登録
+    location_id = db.ensure_location(location)
+    if location_id is None:
+        logger.error("観測地点の確認・挿入に失敗")
         db.close()
         return 1
 
     # スクレイピング実行
-    scraper = DeltaStationScraper(location.source_url)
-
-    if not scraper.fetch_html():
-        logger.error("✗ HTML取得失敗")
-        db.close()
-        return 1
-
-    raw_data = scraper.scrape()
-    if not raw_data:
-        logger.error("✗ データ抽出失敗")
-        db.close()
-        return 1
-
-    logger.info(f"観測日時: {raw_data.observed_at}")
-
-    # 画像ファイル名生成
-    timestamp = raw_data.observed_at.replace('-', '').replace(':', '').replace(' ', '_')
-    image_filename = f"{timestamp}_DR-74125-l.jpg"
-
-    # バリデーション
     try:
-        observation = raw_data.to_observation(
-            location_id=location.id,
-            image_filename=image_filename
-        )
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(location.source_url, headers=headers, timeout=30)
+        response.raise_for_status()
+        response.encoding = response.apparent_encoding
+
+        # データ抽出
+        raw_data = ScrapedRawData.from_html(response.text, location.source_url)
+        observation = raw_data.to_observation()
+
+        logger.info(f"観測日時: {observation.observed_at}")
+        logger.info(f"気温: {observation.temperature}℃")
+        logger.info(f"路面温度: {observation.road_temperature}℃")
+        logger.info(f"路面状況: {observation.road_condition}")
+
+        # データベースに挿入
+        inserted = db.insert_observation(location_id, observation)
+
+        # 画像ダウンロード（新規挿入時のみ）
+        if inserted:
+            image_dir = Path(__file__).parent.parent / "outputs" / "images"
+            image_path = image_dir / observation.image_filename
+            download_image(observation.image_url, image_path)
+
+        db.close()
+
+        logger.info("=" * 60)
+        logger.info("Delta地点観測データ収集完了")
+        logger.info("=" * 60)
+        return 0
+
     except Exception as e:
-        logger.error(f"✗ バリデーションエラー: {e}")
+        logger.error(f"スクレイピング失敗: {e}")
         db.close()
         return 1
-
-    # 画像ダウンロード
-    if scraper.download_image(observation.image_url, observation.image_filename):
-        logger.info(f"✓ 画像保存: {observation.image_filename}")
-    else:
-        logger.warning(f"⚠ 画像ダウンロード失敗（処理続行）")
-
-    # データベース挿入
-    success, message = db.insert_observation(observation)
-
-    if success:
-        if message == "inserted":
-            logger.info(f"✓ 新規データ挿入: {observation.observed_at}")
-            logger.info(f"  気温: {observation.temperature}℃, 風速: {observation.wind_speed}m/s")
-        elif message == "duplicate":
-            logger.info(f"→ データ未更新（既存データ: {observation.observed_at}）")
-    else:
-        logger.error(f"✗ データ挿入失敗: {message}")
-        db.close()
-        return 1
-
-    db.close()
-    logger.info("=" * 60)
-    return 0
 
 
 if __name__ == "__main__":
