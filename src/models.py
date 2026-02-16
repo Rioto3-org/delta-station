@@ -304,18 +304,18 @@ if __name__ == "__main__":
     )
     print(json.dumps(validated.model_dump(), indent=2, ensure_ascii=False))
 
-    print("\n[異常系テスト] 不正な路面状況")
+    print("\n[正常系テスト] 任意の路面状況文字列")
     try:
-        bad_observation = ObservationData(
+        custom_condition = ObservationData(
             location_id=1,
             observed_at="2026-02-16 10:50",
             captured_at="2026-02-16 10:52",
             temperature=4.7,
-            road_condition="不明な状態",  # 許可されていない値 → None に正規化
+            road_condition="積雪あり",  # 任意の文字列を許可
             image_filename="test.jpg",
             image_url="http://example.com/test.jpg"
         )
-        print("→ road_condition が正規化されました:", bad_observation.road_condition)
+        print("→ road_condition:", custom_condition.road_condition)
     except Exception as e:
         print(f"→ エラー: {e}")
 
