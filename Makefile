@@ -53,11 +53,11 @@ status: ## [ローカル] 実行状態とログを確認
 
 docker-build: ## [Docker] イメージをビルド
 	@echo "Dockerイメージをビルドします..."
-	docker-compose build
+	docker compose build
 
 docker-start: ## [Docker] コンテナを起動（15分間隔で自動実行）
 	@echo "Delta地点観測コンテナを起動します..."
-	docker-compose up -d
+	docker compose up -d
 	@echo "✓ コンテナを起動しました"
 	@echo ""
 	@echo "ログを確認: make docker-logs"
@@ -65,23 +65,23 @@ docker-start: ## [Docker] コンテナを起動（15分間隔で自動実行）
 
 docker-stop: ## [Docker] コンテナを停止
 	@echo "Delta地点観測コンテナを停止します..."
-	docker-compose down
+	docker compose down
 	@echo "✓ コンテナを停止しました"
 
 docker-restart: docker-stop docker-start ## [Docker] コンテナを再起動
 
 docker-logs: ## [Docker] コンテナのログをリアルタイム表示
-	docker-compose logs -f scraper
+	docker compose logs -f scraper
 
 docker-status: ## [Docker] コンテナの状態を確認
 	@echo "=== コンテナ状態 ==="
-	@docker-compose ps
+	@docker compose ps
 	@echo ""
 	@echo "=== 最新ログ（最後の20行） ==="
-	@docker-compose logs --tail=20 scraper
+	@docker compose logs --tail=20 scraper
 
 docker-clean: docker-stop ## [Docker] コンテナ・イメージ・ボリュームを完全削除
 	@echo "Docker環境をクリーンアップします..."
-	docker-compose down -v
+	docker compose down -v
 	docker rmi delta-station-scraper 2>/dev/null || true
 	@echo "✓ クリーンアップ完了"
