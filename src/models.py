@@ -10,12 +10,14 @@ from datetime import datetime
 from typing import Optional, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 import re
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 
 class LocationData(BaseModel):
     """観測地点マスタデータ"""
 
-    id: int = Field(ge=1, description="観測地点ID（1から開始）")
+    id: Optional[int] = Field(default=None, ge=1, description="観測地点ID（1から開始、DB挿入前はNone）")
     location_name: str = Field(min_length=1, max_length=100, description="観測地点名")
     location_address: str = Field(min_length=1, max_length=200, description="住所")
     source_url: str = Field(pattern=r'^https?://.+', description="データ取得元URL")
@@ -229,15 +231,104 @@ class ScrapedRawData(BaseModel):
     road_condition: Optional[str] = None       # "----" や "乾燥" などの文字列
     image_url: str
 
-    def to_observation(self, location_id: int, image_filename: str) -> ObservationData:
+    @staticmethod
+    def from_html(html: str, source_url: str) -> 'ScrapedRawData':
+        """
+        HTMLからデータを抽出してScrapedRawDataを生成
+
+        Args:
+            html: HTML文字列
+            source_url: データ取得元URL
+
+        Returns:
+            ScrapedRawData: 抽出した生データ
+
+        Raises:
+            ValueError: 必須データが抽出できない場合
+        """
+        soup = BeautifulSoup(html, 'lxml')
+        text = soup.get_text()
+
+        # 観測日時: "観測日時：2026-02-16 10:30"
+        match = re.search(r'観測日時[：:]\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})', text)
+        if not match:
+            raise ValueError("観測日時が見つかりません")
+        observed_at = match.group(1).strip()
+
+        # 撮影日時: "撮影日時：02/16 10:32" → "2026-02-16 10:32"
+        match = re.search(r'撮影日時[：:]\s*(\d{2}/\d{2})\s+(\d{2}:\d{2})', text)
+        if not match:
+            raise ValueError("撮影日時が見つかりません")
+        year = observed_at[:4]
+        month_day = match.group(1)
+        time = match.group(2)
+        captured_at = f"{year}-{month_day.replace('/', '-')} {time}"
+
+        # 住所: "住所：仙台市青葉区作並字神前西"
+        match = re.search(r'住所[：:]\s*(.+?)(?:\n|$)', text)
+        location_address = match.group(1).strip() if match else "不明"
+
+        # 観測地点名: "観測地点名：作並宿（チェーン着脱所）"
+        match = re.search(r'観測地点名[：:]\s*(.+?)(?:\n|$)', text)
+        if not match:
+            raise ValueError("観測地点名が見つかりません")
+        location_name = match.group(1).strip()
+
+        # 気象データ（テーブルから抽出）
+        table = soup.find('table')
+        if not table:
+            raise ValueError("データテーブルが見つかりません")
+
+        cells = table.find_all('td')
+        cell_texts = [cell.get_text(strip=True) for cell in cells]
+
+        # データ位置（HTML構造に依存）
+        cumulative_rainfall = cell_texts[0] if len(cell_texts) > 0 else None
+        temperature = cell_texts[1] if len(cell_texts) > 1 else None
+        wind_speed = cell_texts[2] if len(cell_texts) > 2 else None
+        road_temperature = cell_texts[3] if len(cell_texts) > 3 else None
+        road_condition = cell_texts[4] if len(cell_texts) > 4 else None
+
+        # 画像URL
+        img = soup.find('img', alt=re.compile(r'(最新画像|カメラ画像)', re.IGNORECASE))
+        if not img or not img.get('src'):
+            raise ValueError("画像URLが見つかりません")
+        image_url = urljoin(source_url, img['src'])
+
+        return ScrapedRawData(
+            location_name=location_name,
+            location_address=location_address,
+            observed_at=observed_at,
+            captured_at=captured_at,
+            cumulative_rainfall=cumulative_rainfall,
+            temperature=temperature,
+            wind_speed=wind_speed,
+            road_temperature=road_temperature,
+            road_condition=road_condition,
+            image_url=image_url
+        )
+
+    def to_observation(self) -> ObservationData:
         """
         生データをバリデーション済みObservationDataに変換
+
+        location_idとimage_filenameは後で設定する必要がある。
+        この段階では仮の値を設定。
 
         この変換時に、Pydanticの各種バリデーターが自動実行される。
         不正な値は正規化されるか、ValidationErrorが発生する。
         """
+        # 画像ファイル名を生成: "20260216_1030_DR-74125.jpg"
+        timestamp = self.observed_at.replace('-', '').replace(':', '').replace(' ', '_')
+        # URLから元のファイル名のパターンを抽出
+        url_parts = self.image_url.split('/')
+        original_filename = url_parts[-1] if url_parts else 'image.jpg'
+        # 拡張子を取得
+        ext = original_filename.split('.')[-1] if '.' in original_filename else 'jpg'
+        image_filename = f"{timestamp}_{original_filename.replace('.', '_')}.{ext}"
+
         return ObservationData(
-            location_id=location_id,
+            location_id=0,  # 仮の値、後でensure_location()で設定
             observed_at=self.observed_at,
             captured_at=self.captured_at,
             cumulative_rainfall=self.cumulative_rainfall,
