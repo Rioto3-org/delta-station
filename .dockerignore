@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# プロジェクト固有
+outputs/
+*.db
+*.db-journal
+*.log
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# ドキュメント
+docs/
+*.md
+!README.md
+
+# テスト
+tests/
+*.test.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
