@@ -1,4 +1,4 @@
-.PHONY: run stop status help
+.PHONY: start run stop status help
 
 .DEFAULT_GOAL := help
 
@@ -7,6 +7,8 @@ help: ## このヘルプメッセージを表示
 	@echo ""
 	@echo "利用可能なコマンド:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36mmake %-15s\033[0m %s\n", $$1, $$2}'
+
+start: stop run ## 再起動（停止してから開始）
 
 run: ## 15分間隔でバックグラウンド実行を開始（即座に1回実行 + cron設定）
 	@echo "Delta地点観測データ収集を開始します..."
