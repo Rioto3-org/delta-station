@@ -35,8 +35,9 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     """データベース管理クラス"""
 
-    def __init__(self, db_path: str = "test_delta_station.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: str = "outputs/database/test_delta_station.db"):
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)  # ディレクトリ作成
         self.conn: Optional[sqlite3.Connection] = None
 
     def initialize_database(self) -> bool:
@@ -51,7 +52,7 @@ class DatabaseManager:
             with open(schema_path, 'r', encoding='utf-8') as f:
                 schema_sql = f.read()
 
-            self.conn = sqlite3.connect(self.db_path)
+            self.conn = sqlite3.connect(str(self.db_path))
             self.conn.execute("PRAGMA foreign_keys = ON")  # 外部キー制約を有効化
             self.conn.executescript(schema_sql)
             self.conn.commit()
@@ -204,11 +205,11 @@ class DatabaseManager:
 class DeltaStationScraper:
     """Delta地点観測データスクレイパー（test_scraper.pyから移植）"""
 
-    def __init__(self, url: str, image_dir: str = "images"):
+    def __init__(self, url: str, image_dir: str = "outputs/images"):
         self.url = url
         self.soup: Optional[BeautifulSoup] = None
         self.image_dir = Path(image_dir)
-        self.image_dir.mkdir(exist_ok=True)
+        self.image_dir.mkdir(parents=True, exist_ok=True)
 
     def fetch_html(self) -> bool:
         """HTMLを取得してパース"""

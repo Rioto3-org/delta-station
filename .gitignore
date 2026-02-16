@@ -26,7 +26,6 @@ env/
 *.db
 *.sqlite
 *.sqlite3
-test_delta_station.db
 
 # Logs
 *.log
@@ -35,9 +34,8 @@ test_delta_station.db
 .DS_Store
 Thumbs.db
 
-# Project specific
-images/
-test_data.html
+# Project outputs
+outputs/
 
 # uv
 uv.lock
