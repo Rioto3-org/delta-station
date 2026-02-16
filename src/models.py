@@ -335,12 +335,17 @@ class ScrapedRawData(BaseModel):
         """
         # 画像ファイル名を生成: "20260216_1030_DR-74125-l.jpg"
         timestamp = self.observed_at.replace('-', '').replace(':', '').replace(' ', '_')
-        # URLから元のファイル名のパターンを抽出
+        # URLから元のファイル名を抽出（例: "DR-74125-l.jpg"）
         url_parts = self.image_url.split('/')
         original_filename = url_parts[-1] if url_parts else 'image.jpg'
-        # 拡張子を取得
-        ext = original_filename.split('.')[-1] if '.' in original_filename else 'jpg'
-        image_filename = f"{timestamp}_{original_filename.replace('.', '_')}.{ext}"
+        # ファイル名から拡張子を除いたベース名を取得
+        if '.' in original_filename:
+            base_name = original_filename.rsplit('.', 1)[0]  # "DR-74125-l"
+            ext = original_filename.rsplit('.', 1)[1]         # "jpg"
+        else:
+            base_name = original_filename
+            ext = 'jpg'
+        image_filename = f"{timestamp}_{base_name}.{ext}"
 
         return ObservationData(
             location_id=location_id,

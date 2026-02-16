@@ -14,11 +14,11 @@ run: ## 15分間隔でバックグラウンド実行を開始（即座に1回実
 	@echo "Delta地点観測データ収集を開始します..."
 	@echo ""
 	@echo "1. 初回実行を開始..."
-	@uv run python src/scraper.py
+	@python3 src/scraper.py
 	@echo ""
 	@echo "2. cronジョブを設定（15分間隔）..."
 	@(crontab -l 2>/dev/null | grep -v "delta-station"; \
-	  echo "*/15 * * * * cd $(shell pwd) && uv run python src/scraper.py >> $(shell pwd)/outputs/scraper.log 2>&1") | crontab -
+	  echo "*/15 * * * * cd $(shell pwd) && python3 src/scraper.py >> $(shell pwd)/outputs/scraper.log 2>&1") | crontab -
 	@echo "✓ cronジョブを設定しました"
 	@echo ""
 	@crontab -l | grep delta-station
