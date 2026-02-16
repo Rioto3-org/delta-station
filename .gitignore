@@ -40,3 +40,5 @@ outputs/
 # uv
 uv.lock
 .python-version
+
+._*

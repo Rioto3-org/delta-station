@@ -20,15 +20,16 @@ services:
     restart: unless-stopped
 
     # 15分間隔でスクレイピングを実行
-    command: >
-      sh -c "
+    command:
+      - /bin/sh
+      - -c
+      - |
         while true; do
-          echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Starting scraper...'
+          echo "[$$(date '+%Y-%m-%d %H:%M:%S')] Starting scraper..."
           uv run python src/scraper.py
-          echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Scraper finished. Sleeping for 15 minutes...'
+          echo "[$$(date '+%Y-%m-%d %H:%M:%S')] Scraper finished. Sleeping for 15 minutes..."
           sleep 900
         done
-      "
 
     # ヘルスチェック（オプション：データベースファイルの存在確認）
     healthcheck:
