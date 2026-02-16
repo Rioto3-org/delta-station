@@ -26,6 +26,7 @@ env/
 *.db
 *.sqlite
 *.sqlite3
+test_delta_station.db
 
 # Logs
 *.log

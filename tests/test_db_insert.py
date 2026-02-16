@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     """データベース管理クラス"""
 
-    def __init__(self, db_path: str = "delta_station.db"):
+    def __init__(self, db_path: str = "test_delta_station.db"):
         self.db_path = db_path
         self.conn: Optional[sqlite3.Connection] = None
 
@@ -204,9 +204,11 @@ class DatabaseManager:
 class DeltaStationScraper:
     """Delta地点観測データスクレイパー（test_scraper.pyから移植）"""
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, image_dir: str = "images"):
         self.url = url
         self.soup: Optional[BeautifulSoup] = None
+        self.image_dir = Path(image_dir)
+        self.image_dir.mkdir(exist_ok=True)
 
     def fetch_html(self) -> bool:
         """HTMLを取得してパース"""
@@ -291,6 +293,36 @@ class DeltaStationScraper:
             logger.error(f"  → 失敗: {e}")
             return None
 
+    def download_image(self, image_url: str, image_filename: str) -> bool:
+        """画像をダウンロードして保存"""
+        logger.info("✓ 画像ダウンロード")
+        try:
+            image_path = self.image_dir / image_filename
+
+            # 既に存在する場合はスキップ
+            if image_path.exists():
+                logger.info(f"  → スキップ: 既に存在します ({image_filename})")
+                return True
+
+            # 画像をダウンロード
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            response = requests.get(image_url, headers=headers, timeout=30)
+            response.raise_for_status()
+
+            # 保存
+            with open(image_path, 'wb') as f:
+                f.write(response.content)
+
+            file_size = len(response.content)
+            logger.info(f"  → 成功: {image_filename} ({file_size:,} bytes)")
+            logger.info(f"  → 保存先: {image_path}")
+            return True
+        except Exception as e:
+            logger.error(f"  → 失敗: {e}")
+            return False
+
 
 def main():
     """メイン実行"""
@@ -349,6 +381,10 @@ def main():
         db.close()
         return 1
 
+    # 画像をダウンロード
+    if not scraper.download_image(observation.image_url, observation.image_filename):
+        logger.warning("画像のダウンロードに失敗しましたが、処理を続行します")
+
     # 観測データを挿入
     if not db.insert_observation(observation):
         logger.error("観測データの挿入に失敗しました")
@@ -364,9 +400,13 @@ def main():
     # クリーンアップ
     db.close()
 
+    # 画像ディレクトリの確認
+    image_count = len(list(scraper.image_dir.glob("*.jpg")))
+
     logger.info("=" * 60)
     logger.info("🎉 すべてのテストに成功しました！")
     logger.info(f"データベースファイル: {db.db_path}")
+    logger.info(f"画像ディレクトリ: {scraper.image_dir} ({image_count} 件)")
     logger.info("=" * 60)
     return 0
 
