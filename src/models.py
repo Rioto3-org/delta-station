@@ -264,33 +264,45 @@ class ScrapedRawData(BaseModel):
         time = match.group(2)
         captured_at = f"{year}-{month_day.replace('/', '-')} {time}"
 
-        # 住所: "住所：仙台市青葉区作並字神前西"
-        match = re.search(r'住所[：:]\s*(.+?)(?:\n|$)', text)
-        location_address = match.group(1).strip() if match else "不明"
+        # 住所: class="style3" の div から抽出
+        div = soup.find('div', class_='style3')
+        location_address = div.get_text().strip() if div else "不明"
 
-        # 観測地点名: "観測地点名：作並宿（チェーン着脱所）"
-        match = re.search(r'観測地点名[：:]\s*(.+?)(?:\n|$)', text)
-        if not match:
+        # テーブルから観測地点名と気象データを抽出
+        tables = soup.find_all('table')
+        location_name = None
+        cumulative_rainfall = None
+        temperature = None
+        wind_speed = None
+        road_temperature = None
+        road_condition = None
+
+        for table in tables:
+            rows = table.find_all('tr')
+            for row in rows:
+                cols = row.find_all('td')
+                if len(cols) == 2:
+                    label = cols[0].get_text().strip()
+                    value = cols[1].get_text().strip()
+
+                    if label == '観測地点':
+                        location_name = value
+                    elif label == '累加雨量':
+                        cumulative_rainfall = value
+                    elif label == '気温':
+                        temperature = value
+                    elif label == '風速':
+                        wind_speed = value
+                    elif label == '路面温度':
+                        road_temperature = value
+                    elif label == '路面状況':
+                        road_condition = value
+
+        if not location_name:
             raise ValueError("観測地点名が見つかりません")
-        location_name = match.group(1).strip()
 
-        # 気象データ（テーブルから抽出）
-        table = soup.find('table')
-        if not table:
-            raise ValueError("データテーブルが見つかりません")
-
-        cells = table.find_all('td')
-        cell_texts = [cell.get_text(strip=True) for cell in cells]
-
-        # データ位置（HTML構造に依存）
-        cumulative_rainfall = cell_texts[0] if len(cell_texts) > 0 else None
-        temperature = cell_texts[1] if len(cell_texts) > 1 else None
-        wind_speed = cell_texts[2] if len(cell_texts) > 2 else None
-        road_temperature = cell_texts[3] if len(cell_texts) > 3 else None
-        road_condition = cell_texts[4] if len(cell_texts) > 4 else None
-
-        # 画像URL
-        img = soup.find('img', alt=re.compile(r'(最新画像|カメラ画像)', re.IGNORECASE))
+        # 画像URL: <img src="image/DR-74125-l.jpg" alt="">
+        img = soup.find('img', src=re.compile(r'DR-\d+-l\.jpg'))
         if not img or not img.get('src'):
             raise ValueError("画像URLが見つかりません")
         image_url = urljoin(source_url, img['src'])
@@ -308,17 +320,20 @@ class ScrapedRawData(BaseModel):
             image_url=image_url
         )
 
-    def to_observation(self) -> ObservationData:
+    def to_observation(self, location_id: int) -> ObservationData:
         """
         生データをバリデーション済みObservationDataに変換
 
-        location_idとimage_filenameは後で設定する必要がある。
-        この段階では仮の値を設定。
+        Args:
+            location_id: 観測地点ID（ensure_location()で取得した値）
+
+        Returns:
+            ObservationData: バリデーション済み観測データ
 
         この変換時に、Pydanticの各種バリデーターが自動実行される。
         不正な値は正規化されるか、ValidationErrorが発生する。
         """
-        # 画像ファイル名を生成: "20260216_1030_DR-74125.jpg"
+        # 画像ファイル名を生成: "20260216_1030_DR-74125-l.jpg"
         timestamp = self.observed_at.replace('-', '').replace(':', '').replace(' ', '_')
         # URLから元のファイル名のパターンを抽出
         url_parts = self.image_url.split('/')
@@ -328,7 +343,7 @@ class ScrapedRawData(BaseModel):
         image_filename = f"{timestamp}_{original_filename.replace('.', '_')}.{ext}"
 
         return ObservationData(
-            location_id=0,  # 仮の値、後でensure_location()で設定
+            location_id=location_id,
             observed_at=self.observed_at,
             captured_at=self.captured_at,
             cumulative_rainfall=self.cumulative_rainfall,

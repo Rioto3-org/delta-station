@@ -220,10 +220,7 @@ def main():
 
         # データ抽出
         raw_data = ScrapedRawData.from_html(response.text, location.source_url)
-        observation = raw_data.to_observation()
-
-        # location_idを設定
-        observation.location_id = location_id
+        observation = raw_data.to_observation(location_id)
 
         logger.info(f"観測日時: {observation.observed_at}")
         logger.info(f"気温: {observation.temperature}℃")
