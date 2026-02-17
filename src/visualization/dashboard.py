@@ -6,7 +6,7 @@ Delta地点 観測ダッシュボード (Streamlit)
 """
 
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -22,6 +22,7 @@ st.set_page_config(
 )
 
 DB_PATH = Path(__file__).parent.parent.parent / "outputs" / "database" / "delta_station.db"
+IMAGE_DIR = Path(__file__).parent.parent.parent / "outputs" / "images"
 
 
 @st.cache_data(ttl=60)
@@ -51,6 +52,101 @@ def load_data(hours: int = 168):
     except Exception as e:
         st.error(f"データ読み込みエラー: {e}")
         return pd.DataFrame()
+
+
+@st.cache_data(ttl=60)
+def load_image_metadata(start_date: date | None = None, end_date: date | None = None) -> pd.DataFrame:
+    """画像メタデータをDBから読み込み"""
+    if not DB_PATH.exists():
+        return pd.DataFrame()
+
+    query = """
+        SELECT observed_at, captured_at, image_filename
+        FROM observations
+        WHERE image_filename IS NOT NULL
+    """
+    params: list[str] = []
+
+    if start_date:
+        query += " AND date(observed_at) >= ?"
+        params.append(start_date.isoformat())
+    if end_date:
+        query += " AND date(observed_at) <= ?"
+        params.append(end_date.isoformat())
+
+    query += " ORDER BY observed_at DESC"
+
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            df = pd.read_sql(query, conn, params=params)
+        if df.empty:
+            return df
+        df["observed_at"] = pd.to_datetime(df["observed_at"], errors="coerce")
+        df["captured_at"] = pd.to_datetime(df["captured_at"], errors="coerce")
+        df["image_path"] = df["image_filename"].map(lambda n: IMAGE_DIR / str(n))
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
+def render_image_viewer() -> None:
+    """画像表示（最新・前後移動・日時検索）"""
+    st.header("🖼️ 画像プレビュー")
+
+    if not DB_PATH.exists():
+        st.info("画像DBが見つかりません（outputs/database/delta_station.db）")
+        return
+
+    col_start, col_end = st.columns(2)
+    with col_start:
+        start_date = st.date_input("開始日", value=None)
+    with col_end:
+        end_date = st.date_input("終了日", value=None)
+
+    if start_date and end_date and start_date > end_date:
+        st.warning("開始日が終了日より後になっています")
+        return
+
+    image_df = load_image_metadata(start_date=start_date, end_date=end_date)
+    if image_df.empty:
+        st.info("条件に一致する画像メタデータがありません")
+        return
+
+    current_key = "image_viewer_index"
+    filter_key = "image_viewer_filter"
+    current_filter = (str(start_date) if start_date else "", str(end_date) if end_date else "")
+
+    if st.session_state.get(filter_key) != current_filter:
+        st.session_state[current_key] = 0
+        st.session_state[filter_key] = current_filter
+
+    max_index = len(image_df) - 1
+    current_index = int(st.session_state.get(current_key, 0))
+    current_index = min(max(current_index, 0), max_index)
+
+    nav_prev, nav_meta, nav_next = st.columns([1, 2, 1])
+    with nav_prev:
+        if st.button("◀ 1つ前", use_container_width=True, disabled=current_index >= max_index):
+            current_index = min(current_index + 1, max_index)
+    with nav_next:
+        if st.button("1つ次 ▶", use_container_width=True, disabled=current_index <= 0):
+            current_index = max(current_index - 1, 0)
+    with nav_meta:
+        st.caption(f"{current_index + 1} / {len(image_df)}")
+
+    st.session_state[current_key] = current_index
+    row = image_df.iloc[current_index]
+    image_path = Path(row["image_path"])
+
+    st.write(f"観測日時: {row['observed_at']}")
+    if pd.notna(row["captured_at"]):
+        st.write(f"撮影日時: {row['captured_at']}")
+    st.caption(f"画像ファイル: {row['image_filename']}")
+
+    if image_path.exists():
+        st.image(str(image_path), caption=str(row["image_filename"]), use_container_width=True)
+    else:
+        st.warning("画像ファイルが見つかりません（メタデータのみ存在）")
 
 
 def main():
@@ -200,6 +296,8 @@ def main():
             st.metric("最低気温", f"{df['temperature'].min():.1f}℃")
         else:
             st.metric("最低気温", "N/A")
+
+    render_image_viewer()
 
 
 if __name__ == "__main__":
