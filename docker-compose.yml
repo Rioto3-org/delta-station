@@ -5,7 +5,7 @@ services:
   dashboard:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dashboard
     container_name: delta-station-dashboard
 
     # データ永続化（outputsフォルダを参照）
@@ -23,9 +23,6 @@ services:
 
     # 自動再起動設定
     restart: unless-stopped
-
-    # Streamlitダッシュボード起動
-    command: uv run streamlit run src/visualization/dashboard.py --server.port 8501 --server.address 0.0.0.0
 
 # ネットワーク設定（共通）
 networks:
