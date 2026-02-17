@@ -6,7 +6,6 @@ Delta地点 観測ダッシュボード (Streamlit)
 """
 
 import sqlite3
-from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -55,7 +54,7 @@ def load_data(hours: int = 168):
 
 
 @st.cache_data(ttl=60)
-def load_image_metadata(start_date: date | None = None, end_date: date | None = None) -> pd.DataFrame:
+def load_image_metadata() -> pd.DataFrame:
     """画像メタデータをDBから読み込み"""
     if not DB_PATH.exists():
         return pd.DataFrame()
@@ -65,20 +64,11 @@ def load_image_metadata(start_date: date | None = None, end_date: date | None = 
         FROM observations
         WHERE image_filename IS NOT NULL
     """
-    params: list[str] = []
-
-    if start_date:
-        query += " AND date(observed_at) >= ?"
-        params.append(start_date.isoformat())
-    if end_date:
-        query += " AND date(observed_at) <= ?"
-        params.append(end_date.isoformat())
-
     query += " ORDER BY observed_at DESC"
 
     try:
         with sqlite3.connect(DB_PATH) as conn:
-            df = pd.read_sql(query, conn, params=params)
+            df = pd.read_sql(query, conn)
         if df.empty:
             return df
         df["observed_at"] = pd.to_datetime(df["observed_at"], errors="coerce")
@@ -90,49 +80,25 @@ def load_image_metadata(start_date: date | None = None, end_date: date | None = 
 
 
 def render_image_viewer() -> None:
-    """画像表示（最新・前後移動・日時検索）"""
+    """画像表示（最新・前後移動）"""
     st.header("🖼️ 画像プレビュー")
 
     if not DB_PATH.exists():
         st.info("画像DBが見つかりません（outputs/database/delta_station.db）")
         return
 
-    col_start, col_end = st.columns(2)
-    with col_start:
-        start_date = st.date_input("開始日", value=None)
-    with col_end:
-        end_date = st.date_input("終了日", value=None)
-
-    if start_date and end_date and start_date > end_date:
-        st.warning("開始日が終了日より後になっています")
-        return
-
-    image_df = load_image_metadata(start_date=start_date, end_date=end_date)
+    image_df = load_image_metadata()
     if image_df.empty:
-        st.info("条件に一致する画像メタデータがありません")
+        st.info("画像メタデータがありません")
         return
 
     current_key = "image_viewer_index"
-    filter_key = "image_viewer_filter"
-    current_filter = (str(start_date) if start_date else "", str(end_date) if end_date else "")
-
-    if st.session_state.get(filter_key) != current_filter:
+    if current_key not in st.session_state:
         st.session_state[current_key] = 0
-        st.session_state[filter_key] = current_filter
 
     max_index = len(image_df) - 1
     current_index = int(st.session_state.get(current_key, 0))
     current_index = min(max(current_index, 0), max_index)
-
-    nav_prev, nav_meta, nav_next = st.columns([1, 2, 1])
-    with nav_prev:
-        if st.button("◀ 1つ前", use_container_width=True, disabled=current_index >= max_index):
-            current_index = min(current_index + 1, max_index)
-    with nav_next:
-        if st.button("1つ次 ▶", use_container_width=True, disabled=current_index <= 0):
-            current_index = max(current_index - 1, 0)
-    with nav_meta:
-        st.caption(f"{current_index + 1} / {len(image_df)}")
 
     st.session_state[current_key] = current_index
     row = image_df.iloc[current_index]
@@ -147,6 +113,16 @@ def render_image_viewer() -> None:
         st.image(str(image_path), caption=str(row["image_filename"]), use_container_width=True)
     else:
         st.warning("画像ファイルが見つかりません（メタデータのみ存在）")
+
+    nav_prev, nav_meta, nav_next = st.columns([1, 2, 1])
+    with nav_prev:
+        if st.button("◀ 1つ前", use_container_width=True, disabled=current_index >= max_index):
+            st.session_state[current_key] = min(current_index + 1, max_index)
+    with nav_next:
+        if st.button("1つ次 ▶", use_container_width=True, disabled=current_index <= 0):
+            st.session_state[current_key] = max(current_index - 1, 0)
+    with nav_meta:
+        st.caption(f"{current_index + 1} / {len(image_df)}")
 
 
 def main():
