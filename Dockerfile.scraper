@@ -1,0 +1,33 @@
+FROM python:3.12-slim
+
+# タイムゾーン設定
+ENV TZ=Asia/Tokyo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# 作業ディレクトリ
+WORKDIR /app
+
+# システム依存関係のインストール
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# uvのインストール
+RUN pip install --no-cache-dir uv
+
+# プロジェクトファイルのコピー（依存関係定義）
+COPY pyproject.toml uv.lock* ./
+
+# 依存関係のインストール
+RUN uv sync --frozen || uv sync
+
+# アプリケーションコードのコピー（scraperに必要なもののみ）
+COPY src/__init__.py ./src/
+COPY src/collector/ ./src/collector/
+COPY database/ ./database/
+
+# outputs ディレクトリの作成（ボリュームマウントされる）
+RUN mkdir -p /app/outputs/database /app/outputs/images
+
+# スクレイパー実行（15分間隔ループ）
+CMD ["/bin/sh", "-c", "while true; do echo \"[$(date '+%Y-%m-%d %H:%M:%S')] Starting scraper...\"; uv run python -m src.collector.scraper; echo \"[$(date '+%Y-%m-%d %H:%M:%S')] Scraper finished. Sleeping for 15 minutes...\"; sleep 900; done"]

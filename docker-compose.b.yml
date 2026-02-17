@@ -5,7 +5,7 @@ services:
   scraper-b:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.scraper
     container_name: delta-station-scraper-b
 
     # データ永続化（outputsフォルダとマウント）
@@ -16,21 +16,10 @@ services:
     environment:
       - TZ=Asia/Tokyo
       - PYTHONUNBUFFERED=1
+      - SCRAPER_NAME=B
 
     # 自動再起動設定
     restart: unless-stopped
-
-    # 15分間隔でスクレイピングを実行
-    command:
-      - /bin/sh
-      - -c
-      - |
-        while true; do
-          echo "[B] [$$(date '+%Y-%m-%d %H:%M:%S')] Starting scraper..."
-          uv run python -m src.collector.scraper
-          echo "[B] [$$(date '+%Y-%m-%d %H:%M:%S')] Scraper finished. Sleeping for 15 minutes..."
-          sleep 900
-        done
 
     # ヘルスチェック（オプション：データベースファイルの存在確認）
     healthcheck:
