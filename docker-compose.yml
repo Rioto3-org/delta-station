@@ -62,7 +62,7 @@ services:
     restart: unless-stopped
 
     # Streamlitダッシュボード起動
-    command: streamlit run src/visualization/dashboard.py --server.port 8501 --server.address 0.0.0.0
+    command: uv run streamlit run src/visualization/dashboard.py --server.port 8501 --server.address 0.0.0.0
 
 # ネットワーク設定（将来的に分析基盤と接続する際に使用）
 networks:
