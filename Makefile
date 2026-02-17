@@ -1,4 +1,4 @@
-.PHONY: help start run stop status docker-build docker-start docker-stop docker-restart docker-logs docker-status docker-clean
+.PHONY: help start run stop status docker-build docker-start docker-stop docker-restart docker-logs docker-status docker-clean docker-dashboard docker-dashboard-logs
 
 .DEFAULT_GOAL := help
 
@@ -85,3 +85,15 @@ docker-clean: docker-stop ## [Docker] コンテナ・イメージ・ボリュー
 	docker compose down -v
 	docker rmi delta-station-scraper 2>/dev/null || true
 	@echo "✓ クリーンアップ完了"
+
+docker-dashboard: ## [Docker] ダッシュボードのみ起動 (http://localhost:8350)
+	@echo "Delta地点ダッシュボードを起動します..."
+	docker compose up -d dashboard
+	@echo "✓ ダッシュボードを起動しました"
+	@echo ""
+	@echo "🌡️  アクセス: http://localhost:8350"
+	@echo ""
+	@echo "ログを確認: make docker-dashboard-logs"
+
+docker-dashboard-logs: ## [Docker] ダッシュボードのログをリアルタイム表示
+	docker compose logs -f dashboard
