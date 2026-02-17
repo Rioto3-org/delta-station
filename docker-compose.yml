@@ -26,7 +26,7 @@ services:
       - |
         while true; do
           echo "[$$(date '+%Y-%m-%d %H:%M:%S')] Starting scraper..."
-          uv run python src/scraper.py
+          uv run python src/collector/scraper.py
           echo "[$$(date '+%Y-%m-%d %H:%M:%S')] Scraper finished. Sleeping for 15 minutes..."
           sleep 900
         done
@@ -38,6 +38,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delta-station-dashboard
+
+    # データ永続化（scraperと同じoutputsを参照）
+    volumes:
+      - ./outputs:/app/outputs
+
+    # 環境変数
+    environment:
+      - TZ=Asia/Tokyo
+      - PYTHONUNBUFFERED=1
+
+    # ポート公開（8350でアクセス）
+    ports:
+      - "8350:8501"
+
+    # 自動再起動設定
+    restart: unless-stopped
+
+    # Streamlitダッシュボード起動
+    command: streamlit run src/visualization/dashboard.py --server.port 8501 --server.address 0.0.0.0
 
 # ネットワーク設定（将来的に分析基盤と接続する際に使用）
 networks:
