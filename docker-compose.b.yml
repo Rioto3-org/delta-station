@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # スクレイパーB（開発・次期運用）
+  scraper-b:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delta-station-scraper-b
+
+    # データ永続化（outputsフォルダとマウント）
+    volumes:
+      - ./outputs:/app/outputs
+
+    # 環境変数
+    environment:
+      - TZ=Asia/Tokyo
+      - PYTHONUNBUFFERED=1
+
+    # 自動再起動設定
+    restart: unless-stopped
+
+    # 15分間隔でスクレイピングを実行
+    command:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          echo "[B] [$$(date '+%Y-%m-%d %H:%M:%S')] Starting scraper..."
+          uv run python src/collector/scraper.py
+          echo "[B] [$$(date '+%Y-%m-%d %H:%M:%S')] Scraper finished. Sleeping for 15 minutes..."
+          sleep 900
+        done
+
+    # ヘルスチェック（オプション：データベースファイルの存在確認）
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/outputs/database/delta_station.db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# ネットワーク設定（共通ネットワークを使用）
+networks:
+  default:
+    name: delta-station-network
+    external: true
