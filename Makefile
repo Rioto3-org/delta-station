@@ -85,7 +85,7 @@ docker-clean: docker-stop ## [Docker] コンテナ・イメージ・ボリュー
 
 docker-dashboard: ## [Docker] ダッシュボードのみ起動 (http://localhost:8350)
 	@echo "Delta地点ダッシュボードを起動します..."
-	docker compose up -d dashboard
+	docker compose up -d --build dashboard
 	@echo "✓ ダッシュボードを起動しました"
 	@echo ""
 	@echo "🌡️  アクセス: http://localhost:8350"
@@ -101,7 +101,7 @@ docker-dashboard-logs: ## [Docker] ダッシュボードのログをリアルタ
 
 docker-scraper-a: ## [Docker] スクレイパーA起動（運用）
 	@echo "スクレイパーA（運用中）を起動します..."
-	docker compose -f docker-compose.a.yml up -d
+	docker compose -f docker-compose.a.yml up -d --build
 	@echo "✓ スクレイパーAを起動しました"
 
 docker-scraper-a-stop: ## [Docker] スクレイパーA停止
@@ -118,7 +118,7 @@ docker-scraper-a-logs: ## [Docker] スクレイパーAのログをリアルタ�
 
 docker-scraper-b: ## [Docker] スクレイパーB起動（開発）
 	@echo "スクレイパーB（開発中）を起動します..."
-	docker compose -f docker-compose.b.yml up -d
+	docker compose -f docker-compose.b.yml up -d --build
 	@echo "✓ スクレイパーBを起動しました"
 
 docker-scraper-b-stop: ## [Docker] スクレイパーB停止
