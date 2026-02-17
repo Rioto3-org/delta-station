@@ -88,7 +88,7 @@ docker-clean: docker-stop ## [Docker] コンテナ・イメージ・ボリュー
 
 docker-dashboard: ## [Docker] ダッシュボードのみ起動 (http://localhost:8350)
 	@echo "Delta地点ダッシュボードを起動します..."
-	docker compose up -d dashboard
+	docker compose up -d --build dashboard
 	@echo "✓ ダッシュボードを起動しました"
 	@echo ""
 	@echo "🌡️  アクセス: http://localhost:8350"
