@@ -27,7 +27,7 @@ services:
       - |
         while true; do
           echo "[A] [$$(date '+%Y-%m-%d %H:%M:%S')] Starting scraper..."
-          uv run python src/collector/scraper.py
+          uv run python -m src.collector.scraper
           echo "[A] [$$(date '+%Y-%m-%d %H:%M:%S')] Scraper finished. Sleeping for 15 minutes..."
           sleep 900
         done
