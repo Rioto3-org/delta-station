@@ -22,7 +22,33 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+        width: 100% !important;
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+    }
+    *, *::before, *::after {
+        box-sizing: border-box !important;
+    }
+    [data-testid="stMain"] > div,
+    [data-testid="stMain"] .block-container,
+    [data-testid="column"],
+    [data-testid="stHorizontalBlock"],
+    [data-testid="stVerticalBlock"],
+    [data-testid="stDataFrame"],
+    [data-testid="stPlotlyChart"],
+    [data-testid="stImage"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+    [data-testid="stDataFrame"] > div,
+    [data-testid="stPlotlyChart"] > div {
+        max-width: 100% !important;
+        overflow-x: auto !important;
+    }
     [data-testid="stImage"] img {
+        width: 100% !important;
         max-width: 95vw !important;
         height: auto !important;
     }
