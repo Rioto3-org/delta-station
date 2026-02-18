@@ -100,7 +100,7 @@ def load_observation_at(observed_at: str) -> pd.Series | None:
 
 def render_image_viewer(selected_row: pd.Series | None) -> str | None:
     """画像表示"""
-    st.subheader("🖼️ 画像プレビュー")
+    st.markdown("**🖼️ 画像プレビュー**")
 
     if selected_row is None:
         st.info("画像メタデータがありません")
@@ -184,7 +184,7 @@ def main():
     with right_col:
         synced = load_observation_at(selected_observed_at) if selected_observed_at else None
         current = synced if synced is not None else latest
-        st.subheader("📊 最新観測データ")
+        st.markdown("**📊 最新観測データ**")
         st.caption(f"表示中の観測日時: {current['observed_at']}")
         col1, col2 = st.columns(2)
         with col1:
