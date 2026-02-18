@@ -11,32 +11,23 @@ import streamlit as st
 st.set_page_config(page_title="ふきのとう分析", layout="wide")
 st.title("ふきのとう分析")
 
-st.warning(
-    "初年度モデルのため、この地中温度推定は仮説ベースです。"
-    "実測データが揃い次第、係数やしきい値を見直してください。"
-)
-st.markdown(
-    "推定式（5cm）:  \n"
-    "`T5[t] = T5[t-1] + 0.18 * (Road[t-36] - T5[t-1])`  \n"
-    "日中央値式:  \n"
-    "`T5_day(d) = median(T5[t] for observed_at[t] in day d)`  \n"
-    "- 10分間隔データを前提（36ステップ = 6時間遅れ）  \n"
-    "- 推定値は `-5〜25℃` にクリップ"
-)
-
 DB_PATH = Path(__file__).parent.parent.parent.parent / "outputs" / "database" / "delta_station.db"
 GDD_BASE_TEMP = 0.0
 GDD_START_DATE = pd.Timestamp("2026-02-17")
+GERMINATION_THRESHOLD = 2.5
+GERMINATION_DAYS = 4
+AIR_CORRECTION_BETA = 0.03
+GDD_PEAK = 25.0
 
 
 @st.cache_data(ttl=60)
-def load_road_temperature(hours: int) -> pd.DataFrame:
-    """路面温度の時系列を読み込む。"""
+def load_observation_data(hours: int) -> pd.DataFrame:
+    """路面温度と気温の時系列を読み込む。"""
     if not DB_PATH.exists():
         return pd.DataFrame()
 
     query = f"""
-        SELECT observed_at, road_temperature
+        SELECT observed_at, road_temperature, temperature
         FROM observations
         WHERE observed_at >= datetime('now', '-{hours} hours', 'localtime')
           AND road_temperature IS NOT NULL
@@ -46,17 +37,15 @@ def load_road_temperature(hours: int) -> pd.DataFrame:
         df = pd.read_sql(query, conn)
     if df.empty:
         return df
+
     df["observed_at"] = pd.to_datetime(df["observed_at"], errors="coerce")
     df = df.dropna(subset=["observed_at"]).copy()
     df["road_temperature"] = pd.to_numeric(df["road_temperature"], errors="coerce")
+    df["temperature"] = pd.to_numeric(df["temperature"], errors="coerce")
     return df.dropna(subset=["road_temperature"])
 
 
-def estimate_soil_temp(
-    road_series: pd.Series,
-    lag_steps: int,
-    alpha: float,
-) -> pd.Series:
+def estimate_soil_temp(road_series: pd.Series, lag_steps: int, alpha: float) -> pd.Series:
     """一次遅れモデルで地中温度を推定する。"""
     shifted = road_series.shift(lag_steps)
     est = shifted.copy()
@@ -85,7 +74,7 @@ period_hours = st.sidebar.selectbox(
     index=2,
 )
 
-df = load_road_temperature(period_hours)
+df = load_observation_data(period_hours)
 if df.empty:
     st.info("路面温度データがありません。")
     st.stop()
@@ -93,36 +82,74 @@ if df.empty:
 sampling_minutes = 10
 lag5_steps = int(6 * 60 / sampling_minutes)
 df["soil_temp_5cm"] = estimate_soil_temp(df["road_temperature"], lag5_steps, alpha=0.18)
-daily_soil = (
+
+daily = (
     df.assign(observed_date=df["observed_at"].dt.floor("D"))
-    .groupby("observed_date", as_index=False)["soil_temp_5cm"]
-    .median()
-    .rename(columns={"soil_temp_5cm": "soil_temp_5cm_daily_median"})
+    .groupby("observed_date", as_index=False)
+    .agg(
+        soil_temp_5cm_daily_median=("soil_temp_5cm", "median"),
+        air_temp_daily_median=("temperature", "median"),
+    )
 )
-gdd_daily = daily_soil[daily_soil["observed_date"] >= GDD_START_DATE].copy()
-gdd_daily["gdd_component"] = (gdd_daily["soil_temp_5cm_daily_median"] - GDD_BASE_TEMP).clip(lower=0.0)
-gdd_value = float(gdd_daily["gdd_component"].sum())
+
+model_daily = daily[daily["observed_date"] >= GDD_START_DATE].copy()
+model_daily["gdd_component"] = (model_daily["soil_temp_5cm_daily_median"] - GDD_BASE_TEMP).clip(lower=0.0)
+model_daily["air_adjust"] = 1 + AIR_CORRECTION_BETA * (model_daily["air_temp_daily_median"] - 5.0).clip(-5.0, 5.0)
+model_daily["growth_component"] = (model_daily["gdd_component"] * model_daily["air_adjust"]).clip(lower=0.0)
 
 latest = df.iloc[-1]
 today_date = latest["observed_at"].floor("D")
-today_daily = daily_soil[daily_soil["observed_date"] == today_date]
-today_mean_text = (
+today_daily = daily[daily["observed_date"] == today_date]
+
+soil_now_text = f"{latest['soil_temp_5cm']:.1f}℃" if pd.notna(latest["soil_temp_5cm"]) else "N/A"
+today_median_text = (
     f"{float(today_daily.iloc[0]['soil_temp_5cm_daily_median']):.2f}℃"
     if not today_daily.empty and pd.notna(today_daily.iloc[0]["soil_temp_5cm_daily_median"])
     else "N/A"
 )
+gdd_value = float(model_daily["gdd_component"].sum())
+growth_gdd = float(model_daily["growth_component"].sum())
+growth_index = 1 + 99 * min(max(growth_gdd / GDD_PEAK, 0.0), 1.0)
+
+recent_days = model_daily.tail(GERMINATION_DAYS)
+is_germination_ready = (
+    len(recent_days) == GERMINATION_DAYS
+    and bool((recent_days["soil_temp_5cm_daily_median"] >= GERMINATION_THRESHOLD).all())
+)
+if is_germination_ready:
+    germination_status = "発芽開始候補: 到達"
+elif not model_daily.empty and float(model_daily.iloc[-1]["soil_temp_5cm_daily_median"]) >= GERMINATION_THRESHOLD:
+    germination_status = "発芽開始候補: 接近中"
+else:
+    germination_status = "発芽開始候補: 未到達"
+
+st.warning(
+    "初年度モデルのため、地中温度推定・発芽判定・成長指数は仮説ベースです。"
+    "実測データが揃い次第、係数としきい値を見直してください。"
+)
+st.caption("GrowthIndex は相対指標です。1=発芽時点、100=収穫推奨上限の目安（絶対値ではない）。")
 
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.metric("推定地中温度(5cm)", f"{latest['soil_temp_5cm']:.1f}℃" if pd.notna(latest["soil_temp_5cm"]) else "N/A")
+    st.metric("推定地中温度(5cm)", soil_now_text)
 with c2:
-    st.metric("本日時点の日中央値(5cm)", today_mean_text)
+    st.metric("本日時点の日中央値(5cm)", today_median_text)
 with c3:
     st.metric("累積GDD相当(Tb=0, 中央値, 2/17起算)", f"{gdd_value:.2f}℃日")
 
 st.caption(
-    f"GDD起算日: {GDD_START_DATE.strftime('%Y-%m-%d')} / "
+    f"起算日: {GDD_START_DATE.strftime('%Y-%m-%d')} / "
     "当日の日中央値は最新観測時刻までのデータで計算"
+)
+
+st.header("地中温度推定")
+st.markdown(
+    "推定式（5cm）:  \n"
+    "`T5[t] = T5[t-1] + 0.18 * (Road[t-36] - T5[t-1])`  \n"
+    "日中央値式:  \n"
+    "`T5_day(d) = median(T5[t] for observed_at[t] in day d)`  \n"
+    "- 10分間隔データを前提（36ステップ = 6時間遅れ）  \n"
+    "- 推定値は `-5〜25℃` にクリップ"
 )
 
 fig = go.Figure()
@@ -146,8 +173,8 @@ fig.add_trace(
 )
 fig.add_trace(
     go.Scatter(
-        x=daily_soil["observed_date"],
-        y=daily_soil["soil_temp_5cm_daily_median"],
+        x=daily["observed_date"],
+        y=daily["soil_temp_5cm_daily_median"],
         mode="lines+markers",
         name="推定地中温度(5cm) 日中央値",
         line=dict(color="#D64545", width=3),
@@ -162,3 +189,27 @@ fig.update_layout(
     height=460,
 )
 st.plotly_chart(fig, use_container_width=True)
+
+st.header("発芽モデル")
+st.markdown(
+    f"- 判定条件: `日中央値(地中5cm) >= {GERMINATION_THRESHOLD:.1f}℃` が `{GERMINATION_DAYS}日連続`\n"
+    "- 0℃未満で即時リセットするルールは採用せず、連続条件のみで判定"
+)
+st.metric("発芽判定ステータス", germination_status)
+
+st.header("成長モデル")
+st.markdown(
+    "成長量（1日）:  \n"
+    "`g_d = max(Tsoil_day - Tb, 0)`  \n"
+    "気温補正:  \n"
+    "`c_d = 1 + 0.03 * clamp(Tair_day - 5, -5, 5)`  \n"
+    "補正後成長量:  \n"
+    "`g'_d = max(g_d * c_d, 0)`  \n"
+    "成長指数:  \n"
+    "`GrowthIndex = 1 + 99 * clamp(sum(g'_d) / 25, 0, 1)`"
+)
+gc1, gc2 = st.columns(2)
+with gc1:
+    st.metric("累積成長量（補正後）", f"{growth_gdd:.2f}℃日")
+with gc2:
+    st.metric("GrowthIndex", f"{growth_index:.1f}")
