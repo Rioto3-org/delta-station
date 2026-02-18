@@ -19,6 +19,17 @@ st.set_page_config(
     page_icon="🌡️",
     layout="wide"
 )
+st.markdown(
+    """
+    <style>
+    [data-testid="stImage"] img {
+        max-width: 95vw !important;
+        height: auto !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 DB_PATH = Path(__file__).parent.parent.parent / "outputs" / "database" / "delta_station.db"
 IMAGE_DIR = Path(__file__).parent.parent.parent / "outputs" / "images"
