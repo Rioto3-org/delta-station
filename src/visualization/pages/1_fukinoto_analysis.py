@@ -18,8 +18,8 @@ st.warning(
 st.markdown(
     "推定式（5cm）:  \n"
     "`T5[t] = T5[t-1] + 0.18 * (Road[t-36] - T5[t-1])`  \n"
-    "日平均式:  \n"
-    "`T5_day(d) = mean(T5[t] for observed_at[t] in day d)`  \n"
+    "日中央値式:  \n"
+    "`T5_day(d) = median(T5[t] for observed_at[t] in day d)`  \n"
     "- 10分間隔データを前提（36ステップ = 6時間遅れ）  \n"
     "- 推定値は `-5〜25℃` にクリップ"
 )
@@ -96,19 +96,19 @@ df["soil_temp_5cm"] = estimate_soil_temp(df["road_temperature"], lag5_steps, alp
 daily_soil = (
     df.assign(observed_date=df["observed_at"].dt.floor("D"))
     .groupby("observed_date", as_index=False)["soil_temp_5cm"]
-    .mean()
-    .rename(columns={"soil_temp_5cm": "soil_temp_5cm_daily_mean"})
+    .median()
+    .rename(columns={"soil_temp_5cm": "soil_temp_5cm_daily_median"})
 )
 gdd_daily = daily_soil[daily_soil["observed_date"] >= GDD_START_DATE].copy()
-gdd_daily["gdd_component"] = (gdd_daily["soil_temp_5cm_daily_mean"] - GDD_BASE_TEMP).clip(lower=0.0)
+gdd_daily["gdd_component"] = (gdd_daily["soil_temp_5cm_daily_median"] - GDD_BASE_TEMP).clip(lower=0.0)
 gdd_value = float(gdd_daily["gdd_component"].sum())
 
 latest = df.iloc[-1]
 today_date = latest["observed_at"].floor("D")
 today_daily = daily_soil[daily_soil["observed_date"] == today_date]
 today_mean_text = (
-    f"{float(today_daily.iloc[0]['soil_temp_5cm_daily_mean']):.2f}℃"
-    if not today_daily.empty and pd.notna(today_daily.iloc[0]["soil_temp_5cm_daily_mean"])
+    f"{float(today_daily.iloc[0]['soil_temp_5cm_daily_median']):.2f}℃"
+    if not today_daily.empty and pd.notna(today_daily.iloc[0]["soil_temp_5cm_daily_median"])
     else "N/A"
 )
 
@@ -116,13 +116,13 @@ c1, c2, c3 = st.columns(3)
 with c1:
     st.metric("推定地中温度(5cm)", f"{latest['soil_temp_5cm']:.1f}℃" if pd.notna(latest["soil_temp_5cm"]) else "N/A")
 with c2:
-    st.metric("本日時点の日平均(5cm)", today_mean_text)
+    st.metric("本日時点の日中央値(5cm)", today_mean_text)
 with c3:
-    st.metric("累積GDD(Tb=0, 2/17起算)", f"{gdd_value:.2f}℃日")
+    st.metric("累積GDD相当(Tb=0, 中央値, 2/17起算)", f"{gdd_value:.2f}℃日")
 
 st.caption(
     f"GDD起算日: {GDD_START_DATE.strftime('%Y-%m-%d')} / "
-    "当日の日平均は最新観測時刻までのデータで計算"
+    "当日の日中央値は最新観測時刻までのデータで計算"
 )
 
 fig = go.Figure()
@@ -147,9 +147,9 @@ fig.add_trace(
 fig.add_trace(
     go.Scatter(
         x=daily_soil["observed_date"],
-        y=daily_soil["soil_temp_5cm_daily_mean"],
+        y=daily_soil["soil_temp_5cm_daily_median"],
         mode="lines+markers",
-        name="推定地中温度(5cm) 日平均",
+        name="推定地中温度(5cm) 日中央値",
         line=dict(color="#D64545", width=3),
         marker=dict(size=5),
     )
