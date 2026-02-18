@@ -81,7 +81,7 @@ def load_image_metadata() -> pd.DataFrame:
 
 def render_image_viewer() -> None:
     """画像表示（最新・前後移動）"""
-    st.header("🖼️ 画像プレビュー")
+    # st.header("🖼️ 画像プレビュー")
 
     if not DB_PATH.exists():
         st.info("画像DBが見つかりません（outputs/database/delta_station.db）")
@@ -104,10 +104,11 @@ def render_image_viewer() -> None:
     row = image_df.iloc[current_index]
     image_path = Path(row["image_path"])
 
-    st.write(f"観測日時: {row['observed_at']}")
+    # st.write(f"観測日時: {row['observed_at']}")
     if pd.notna(row["captured_at"]):
-        st.write(f"撮影日時: {row['captured_at']}")
-    st.caption(f"画像ファイル: {row['image_filename']}")
+        st.write(f"撮影日時: {row['captured_at']} / 観測日時: {row['observed_at']}")
+        
+    # st.caption(f"画像ファイル: {row['image_filename']}") 
 
     if image_path.exists():
         st.image(str(image_path), caption=str(row["image_filename"]), use_container_width=True)
@@ -148,6 +149,8 @@ def main():
     # 最新データ表示
     st.header("📊 最新観測データ")
     latest = df.iloc[-1]
+    
+    render_image_viewer()
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -273,7 +276,7 @@ def main():
         else:
             st.metric("最低気温", "N/A")
 
-    render_image_viewer()
+    
 
 
 if __name__ == "__main__":
