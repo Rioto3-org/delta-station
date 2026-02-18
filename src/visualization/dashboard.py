@@ -81,7 +81,7 @@ def load_image_metadata() -> pd.DataFrame:
 
 def render_image_viewer() -> None:
     """画像表示（最新・前後移動）"""
-    # st.header("🖼️ 画像プレビュー")
+    st.subheader("🖼️ 画像プレビュー")
 
     if not DB_PATH.exists():
         st.info("画像DBが見つかりません（outputs/database/delta_station.db）")
@@ -104,14 +104,23 @@ def render_image_viewer() -> None:
     row = image_df.iloc[current_index]
     image_path = Path(row["image_path"])
 
-    # st.write(f"観測日時: {row['observed_at']}")
+    st.write(f"画像の観測日時: {row['observed_at']}")
     if pd.notna(row["captured_at"]):
-        st.write(f"撮影日時: {row['captured_at']} / 観測日時: {row['observed_at']}")
-        
-    # st.caption(f"画像ファイル: {row['image_filename']}") 
+        st.write(f"撮影日時: {row['captured_at']}")
+    st.caption(f"画像ファイル: {row['image_filename']}")
+
+    zoom_key = "image_viewer_zoom"
+    if zoom_key not in st.session_state:
+        st.session_state[zoom_key] = False
+    zoom_label = "通常表示に戻す" if st.session_state[zoom_key] else "拡大表示"
+    if st.button(zoom_label, use_container_width=False):
+        st.session_state[zoom_key] = not st.session_state[zoom_key]
 
     if image_path.exists():
-        st.image(str(image_path), caption=str(row["image_filename"]), use_container_width=True)
+        if st.session_state[zoom_key]:
+            st.image(str(image_path), caption=str(row["image_filename"]), use_container_width=True)
+        else:
+            st.image(str(image_path), caption=str(row["image_filename"]), width=520)
     else:
         st.warning("画像ファイルが見つかりません（メタデータのみ存在）")
 
@@ -146,48 +155,48 @@ def main():
         st.warning("データが見つかりません")
         return
     
-    # 最新データ表示
-    st.header("📊 最新観測データ")
+    st.header("🧭 最新状況")
     latest = df.iloc[-1]
-    
-    render_image_viewer()
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        temp_val = latest['temperature']
-        if pd.notna(temp_val):
-            st.metric("気温", f"{temp_val:.1f}℃")
-        else:
-            st.metric("気温", "N/A")
-    
-    with col2:
-        road_temp_val = latest['road_temperature']
-        if pd.notna(road_temp_val):
-            st.metric("路面温度", f"{road_temp_val:.1f}℃")
-        else:
-            st.metric("路面温度", "N/A")
-    
-    with col3:
-        wind_val = latest['wind_speed']
-        if pd.notna(wind_val):
-            st.metric("風速", f"{wind_val:.1f}m/s")
-        else:
-            st.metric("風速", "N/A")
-    
-    with col4:
-        rain_val = latest['cumulative_rainfall']
-        if pd.notna(rain_val):
-            st.metric("累加雨量", f"{rain_val:.1f}mm")
-        else:
-            st.metric("累加雨量", "N/A")
-    
-    # 路面状況
-    road_cond = latest['road_condition']
-    if pd.notna(road_cond) and road_cond:
-        st.info(f"🛣️ **路面状況**: {road_cond}")
-    
-    st.caption(f"観測日時: {latest['observed_at']}")
+
+    left_col, right_col = st.columns([1.2, 1.0], gap="large")
+
+    with left_col:
+        render_image_viewer()
+
+    with right_col:
+        st.subheader("📊 最新観測データ")
+        st.caption(f"最新観測日時: {latest['observed_at']}")
+        col1, col2 = st.columns(2)
+        with col1:
+            temp_val = latest['temperature']
+            if pd.notna(temp_val):
+                st.metric("気温", f"{temp_val:.1f}℃")
+            else:
+                st.metric("気温", "N/A")
+        with col2:
+            road_temp_val = latest['road_temperature']
+            if pd.notna(road_temp_val):
+                st.metric("路面温度", f"{road_temp_val:.1f}℃")
+            else:
+                st.metric("路面温度", "N/A")
+
+        col3, col4 = st.columns(2)
+        with col3:
+            wind_val = latest['wind_speed']
+            if pd.notna(wind_val):
+                st.metric("風速", f"{wind_val:.1f}m/s")
+            else:
+                st.metric("風速", "N/A")
+        with col4:
+            rain_val = latest['cumulative_rainfall']
+            if pd.notna(rain_val):
+                st.metric("累加雨量", f"{rain_val:.1f}mm")
+            else:
+                st.metric("累加雨量", "N/A")
+
+        road_cond = latest['road_condition']
+        if pd.notna(road_cond) and road_cond:
+            st.info(f"🛣️ **路面状況**: {road_cond}")
     
     # グラフ表示
     st.header("📈 観測データ推移")
@@ -275,9 +284,6 @@ def main():
             st.metric("最低気温", f"{df['temperature'].min():.1f}℃")
         else:
             st.metric("最低気温", "N/A")
-
-    
-
 
 if __name__ == "__main__":
     main()
