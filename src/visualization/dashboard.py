@@ -244,6 +244,20 @@ def main():
                 )
             else:
                 st.caption("データ期間: N/A")
+
+    st.markdown("**データ期間リスト（最新20件）**")
+    recent_times = (
+        df["observed_at"]
+        .dropna()
+        .sort_values(ascending=False)
+        .head(20)
+        .dt.strftime("%Y-%m-%d %H:%M")
+        .tolist()
+    )
+    if recent_times:
+        st.markdown("\n".join([f"- {t}" for t in recent_times]))
+    else:
+        st.caption("表示できる観測日時がありません")
     
     # グラフ表示
     st.header("📈 観測データ推移")
