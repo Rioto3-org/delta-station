@@ -115,6 +115,17 @@ def render_image_viewer(selected_row: pd.Series | None) -> str | None:
     else:
         st.warning("画像ファイルが見つかりません（メタデータのみ存在）")
 
+    current_key = "image_viewer_index"
+    max_index = int(st.session_state.get("image_viewer_max_index", 0))
+    current_index = int(st.session_state.get(current_key, 0))
+    nav_prev, nav_next = st.columns(2)
+    with nav_prev:
+        if st.button("◀ 1つ前", use_container_width=True, disabled=current_index >= max_index):
+            st.session_state[current_key] = min(current_index + 1, max_index)
+    with nav_next:
+        if st.button("1つ次 ▶", use_container_width=True, disabled=current_index <= 0):
+            st.session_state[current_key] = max(current_index - 1, 0)
+
     if pd.isna(selected_row["observed_at"]):
         return None
     return selected_row["observed_at"].strftime("%Y-%m-%d %H:%M")
@@ -151,19 +162,10 @@ def main():
         if current_key not in st.session_state:
             st.session_state[current_key] = 0
         max_index = len(image_df) - 1
+        st.session_state["image_viewer_max_index"] = max_index
         current_index = int(st.session_state.get(current_key, 0))
         current_index = min(max(current_index, 0), max_index)
         st.session_state[current_key] = current_index
-
-        nav_prev, nav_meta, nav_next = st.columns([1, 2, 1])
-        with nav_prev:
-            if st.button("◀ 1つ前", use_container_width=True, disabled=current_index >= max_index):
-                st.session_state[current_key] = min(current_index + 1, max_index)
-        with nav_next:
-            if st.button("1つ次 ▶", use_container_width=True, disabled=current_index <= 0):
-                st.session_state[current_key] = max(current_index - 1, 0)
-        with nav_meta:
-            st.caption(f"{current_index + 1} / {len(image_df)}")
 
         current_index = int(st.session_state.get(current_key, 0))
         current_index = min(max(current_index, 0), max_index)
