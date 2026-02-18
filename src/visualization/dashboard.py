@@ -215,6 +215,33 @@ def main():
         road_cond = current['road_condition']
         if pd.notna(road_cond) and road_cond:
             st.info(f"🛣️ **路面状況**: {road_cond}")
+
+        st.markdown("**期間統計**")
+        stat1, stat2 = st.columns(2)
+        with stat1:
+            st.metric("総レコード数", len(df))
+        with stat2:
+            if df['temperature'].notna().any():
+                st.metric("最高気温", f"{df['temperature'].max():.1f}℃")
+            else:
+                st.metric("最高気温", "N/A")
+
+        stat3, stat4 = st.columns(2)
+        with stat3:
+            if df['temperature'].notna().any():
+                st.metric("最低気温", f"{df['temperature'].min():.1f}℃")
+            else:
+                st.metric("最低気温", "N/A")
+        with stat4:
+            data_start = df['observed_at'].min()
+            data_end = df['observed_at'].max()
+            if pd.notna(data_start) and pd.notna(data_end):
+                st.caption(
+                    f"データ期間: {data_start.strftime('%Y-%m-%d %H:%M')} 〜 "
+                    f"{data_end.strftime('%Y-%m-%d %H:%M')}"
+                )
+            else:
+                st.caption("データ期間: N/A")
     
     # グラフ表示
     st.header("📈 観測データ推移")
@@ -284,24 +311,5 @@ def main():
         else:
             st.info("雨量データがありません")
     
-    # 統計情報
-    st.header("📊 統計情報")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("総レコード数", len(df))
-    
-    with col2:
-        if df['temperature'].notna().any():
-            st.metric("平均気温", f"{df['temperature'].mean():.1f}℃")
-        else:
-            st.metric("平均気温", "N/A")
-    
-    with col3:
-        if df['temperature'].notna().any():
-            st.metric("最低気温", f"{df['temperature'].min():.1f}℃")
-        else:
-            st.metric("最低気温", "N/A")
-
 if __name__ == "__main__":
     main()
