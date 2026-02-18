@@ -98,53 +98,26 @@ def load_observation_at(observed_at: str) -> pd.Series | None:
         return None
 
 
-def render_image_viewer() -> str | None:
-    """画像表示（最新・前後移動）"""
+def render_image_viewer(selected_row: pd.Series | None) -> str | None:
+    """画像表示"""
     st.subheader("🖼️ 画像プレビュー")
 
-    if not DB_PATH.exists():
-        st.info("画像DBが見つかりません（outputs/database/delta_station.db）")
-        return None
-
-    image_df = load_image_metadata()
-    if image_df.empty:
+    if selected_row is None:
         st.info("画像メタデータがありません")
         return None
 
-    current_key = "image_viewer_index"
-    if current_key not in st.session_state:
-        st.session_state[current_key] = 0
-
-    max_index = len(image_df) - 1
-    current_index = int(st.session_state.get(current_key, 0))
-    current_index = min(max(current_index, 0), max_index)
-
-    st.session_state[current_key] = current_index
-    row = image_df.iloc[current_index]
-    image_path = Path(row["image_path"])
-
-    st.write(f"画像の観測日時: {row['observed_at']}")
-    if pd.notna(row["captured_at"]):
-        st.write(f"撮影日時: {row['captured_at']}")
-    st.caption(f"画像ファイル: {row['image_filename']}")
+    image_path = Path(selected_row["image_path"])
+    if pd.notna(selected_row["captured_at"]):
+        st.write(f"撮影日時: {selected_row['captured_at']}")
 
     if image_path.exists():
-        st.image(str(image_path), caption=str(row["image_filename"]), width=520)
+        st.image(str(image_path), caption=str(selected_row["image_filename"]), width=520)
     else:
         st.warning("画像ファイルが見つかりません（メタデータのみ存在）")
 
-    nav_prev, nav_meta, nav_next = st.columns([1, 2, 1])
-    with nav_prev:
-        if st.button("◀ 1つ前", use_container_width=True, disabled=current_index >= max_index):
-            st.session_state[current_key] = min(current_index + 1, max_index)
-    with nav_next:
-        if st.button("1つ次 ▶", use_container_width=True, disabled=current_index <= 0):
-            st.session_state[current_key] = max(current_index - 1, 0)
-    with nav_meta:
-        st.caption(f"{current_index + 1} / {len(image_df)}")
-    if pd.isna(row["observed_at"]):
+    if pd.isna(selected_row["observed_at"]):
         return None
-    return row["observed_at"].strftime("%Y-%m-%d %H:%M")
+    return selected_row["observed_at"].strftime("%Y-%m-%d %H:%M")
 
 
 def main():
@@ -169,11 +142,42 @@ def main():
     
     st.header("🧭 最新状況")
     latest = df.iloc[-1]
+    image_df = load_image_metadata()
+    selected_row = None
+    selected_observed_at = None
+
+    if not image_df.empty:
+        current_key = "image_viewer_index"
+        if current_key not in st.session_state:
+            st.session_state[current_key] = 0
+        max_index = len(image_df) - 1
+        current_index = int(st.session_state.get(current_key, 0))
+        current_index = min(max(current_index, 0), max_index)
+        st.session_state[current_key] = current_index
+
+        nav_prev, nav_meta, nav_next = st.columns([1, 2, 1])
+        with nav_prev:
+            if st.button("◀ 1つ前", use_container_width=True, disabled=current_index >= max_index):
+                st.session_state[current_key] = min(current_index + 1, max_index)
+        with nav_next:
+            if st.button("1つ次 ▶", use_container_width=True, disabled=current_index <= 0):
+                st.session_state[current_key] = max(current_index - 1, 0)
+        with nav_meta:
+            st.caption(f"{current_index + 1} / {len(image_df)}")
+
+        current_index = int(st.session_state.get(current_key, 0))
+        current_index = min(max(current_index, 0), max_index)
+        selected_row = image_df.iloc[current_index]
+        if pd.notna(selected_row["observed_at"]):
+            selected_observed_at = selected_row["observed_at"].strftime("%Y-%m-%d %H:%M")
 
     left_col, right_col = st.columns([1.2, 1.0], gap="large")
 
     with left_col:
-        selected_observed_at = render_image_viewer()
+        if not DB_PATH.exists():
+            st.info("画像DBが見つかりません（outputs/database/delta_station.db）")
+        else:
+            selected_observed_at = render_image_viewer(selected_row)
 
     with right_col:
         synced = load_observation_at(selected_observed_at) if selected_observed_at else None
