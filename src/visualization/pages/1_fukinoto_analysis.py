@@ -15,6 +15,12 @@ st.warning(
     "初年度モデルのため、この地中温度推定は仮説ベースです。"
     "実測データが揃い次第、係数やしきい値を見直してください。"
 )
+st.markdown(
+    "推定式（5cm）:  \n"
+    "`T5[t] = T5[t-1] + 0.18 * (Road[t-36] - T5[t-1])`  \n"
+    "- 10分間隔データを前提（36ステップ = 6時間遅れ）  \n"
+    "- 推定値は `-5〜25℃` にクリップ"
+)
 
 DB_PATH = Path(__file__).parent.parent.parent.parent / "outputs" / "database" / "delta_station.db"
 
@@ -82,17 +88,10 @@ if df.empty:
 
 sampling_minutes = 10
 lag5_steps = int(6 * 60 / sampling_minutes)
-lag10_steps = int(12 * 60 / sampling_minutes)
-
 df["soil_temp_5cm"] = estimate_soil_temp(df["road_temperature"], lag5_steps, alpha=0.18)
-df["soil_temp_10cm"] = estimate_soil_temp(df["road_temperature"], lag10_steps, alpha=0.10)
 
 latest = df.iloc[-1]
-left, right = st.columns(2)
-with left:
-    st.metric("推定地中温度(5cm)", f"{latest['soil_temp_5cm']:.1f}℃" if pd.notna(latest["soil_temp_5cm"]) else "N/A")
-with right:
-    st.metric("推定地中温度(10cm)", f"{latest['soil_temp_10cm']:.1f}℃" if pd.notna(latest["soil_temp_10cm"]) else "N/A")
+st.metric("推定地中温度(5cm)", f"{latest['soil_temp_5cm']:.1f}℃" if pd.notna(latest["soil_temp_5cm"]) else "N/A")
 
 fig = go.Figure()
 fig.add_trace(
@@ -113,17 +112,8 @@ fig.add_trace(
         line=dict(color="#2E86AB", width=2),
     )
 )
-fig.add_trace(
-    go.Scatter(
-        x=df["observed_at"],
-        y=df["soil_temp_10cm"],
-        mode="lines",
-        name="推定地中温度(10cm)",
-        line=dict(color="#E07A5F", width=2),
-    )
-)
 fig.update_layout(
-    title="路面温度と推定地中温度",
+    title="路面温度と推定地中温度(5cm)",
     xaxis_title="観測日時",
     yaxis_title="温度 (℃)",
     hovermode="x unified",
