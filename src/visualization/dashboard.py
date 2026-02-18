@@ -245,17 +245,36 @@ def main():
             else:
                 st.caption("データ期間: N/A")
 
-    st.markdown("**データ期間リスト（最新20件）**")
-    recent_times = (
-        df["observed_at"]
-        .dropna()
-        .sort_values(ascending=False)
+    st.markdown("**データ期間テーブル（最新20件）**")
+    recent_df = (
+        df.sort_values("observed_at", ascending=False)
         .head(20)
-        .dt.strftime("%Y-%m-%d %H:%M")
-        .tolist()
+        .copy()
     )
-    if recent_times:
-        st.markdown("\n".join([f"- {t}" for t in recent_times]))
+    if not recent_df.empty:
+        table_df = recent_df[
+            [
+                "observed_at",
+                "temperature",
+                "road_temperature",
+                "wind_speed",
+                "cumulative_rainfall",
+                "road_condition",
+            ]
+        ].copy()
+        table_df.insert(0, "No", range(1, len(table_df) + 1))
+        table_df["observed_at"] = table_df["observed_at"].dt.strftime("%Y-%m-%d %H:%M")
+        table_df = table_df.rename(
+            columns={
+                "observed_at": "観測日時",
+                "temperature": "気温(℃)",
+                "road_temperature": "路面温度(℃)",
+                "wind_speed": "風速(m/s)",
+                "cumulative_rainfall": "累加雨量(mm)",
+                "road_condition": "路面状況",
+            }
+        )
+        st.dataframe(table_df, use_container_width=True, hide_index=True)
     else:
         st.caption("表示できる観測日時がありません")
     
