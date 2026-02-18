@@ -18,6 +18,8 @@ st.warning(
 st.markdown(
     "推定式（5cm）:  \n"
     "`T5[t] = T5[t-1] + 0.18 * (Road[t-36] - T5[t-1])`  \n"
+    "日平均式:  \n"
+    "`T5_day(d) = mean(T5[t] for observed_at[t] in day d)`  \n"
     "- 10分間隔データを前提（36ステップ = 6時間遅れ）  \n"
     "- 推定値は `-5〜25℃` にクリップ"
 )
@@ -89,6 +91,12 @@ if df.empty:
 sampling_minutes = 10
 lag5_steps = int(6 * 60 / sampling_minutes)
 df["soil_temp_5cm"] = estimate_soil_temp(df["road_temperature"], lag5_steps, alpha=0.18)
+daily_soil = (
+    df.assign(observed_date=df["observed_at"].dt.floor("D"))
+    .groupby("observed_date", as_index=False)["soil_temp_5cm"]
+    .mean()
+    .rename(columns={"soil_temp_5cm": "soil_temp_5cm_daily_mean"})
+)
 
 latest = df.iloc[-1]
 st.metric("推定地中温度(5cm)", f"{latest['soil_temp_5cm']:.1f}℃" if pd.notna(latest["soil_temp_5cm"]) else "N/A")
@@ -110,6 +118,16 @@ fig.add_trace(
         mode="lines",
         name="推定地中温度(5cm)",
         line=dict(color="#2E86AB", width=2),
+    )
+)
+fig.add_trace(
+    go.Scatter(
+        x=daily_soil["observed_date"],
+        y=daily_soil["soil_temp_5cm_daily_mean"],
+        mode="lines+markers",
+        name="推定地中温度(5cm) 日平均",
+        line=dict(color="#D64545", width=3),
+        marker=dict(size=5),
     )
 )
 fig.update_layout(
