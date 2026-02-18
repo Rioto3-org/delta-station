@@ -25,6 +25,8 @@ st.markdown(
 )
 
 DB_PATH = Path(__file__).parent.parent.parent.parent / "outputs" / "database" / "delta_station.db"
+GDD_BASE_TEMP = 0.0
+GDD_START_DATE = pd.Timestamp("2026-02-17")
 
 
 @st.cache_data(ttl=60)
@@ -97,9 +99,31 @@ daily_soil = (
     .mean()
     .rename(columns={"soil_temp_5cm": "soil_temp_5cm_daily_mean"})
 )
+gdd_daily = daily_soil[daily_soil["observed_date"] >= GDD_START_DATE].copy()
+gdd_daily["gdd_component"] = (gdd_daily["soil_temp_5cm_daily_mean"] - GDD_BASE_TEMP).clip(lower=0.0)
+gdd_value = float(gdd_daily["gdd_component"].sum())
 
 latest = df.iloc[-1]
-st.metric("推定地中温度(5cm)", f"{latest['soil_temp_5cm']:.1f}℃" if pd.notna(latest["soil_temp_5cm"]) else "N/A")
+today_date = latest["observed_at"].floor("D")
+today_daily = daily_soil[daily_soil["observed_date"] == today_date]
+today_mean_text = (
+    f"{float(today_daily.iloc[0]['soil_temp_5cm_daily_mean']):.2f}℃"
+    if not today_daily.empty and pd.notna(today_daily.iloc[0]["soil_temp_5cm_daily_mean"])
+    else "N/A"
+)
+
+c1, c2, c3 = st.columns(3)
+with c1:
+    st.metric("推定地中温度(5cm)", f"{latest['soil_temp_5cm']:.1f}℃" if pd.notna(latest["soil_temp_5cm"]) else "N/A")
+with c2:
+    st.metric("本日時点の日平均(5cm)", today_mean_text)
+with c3:
+    st.metric("累積GDD(Tb=0, 2/17起算)", f"{gdd_value:.2f}℃日")
+
+st.caption(
+    f"GDD起算日: {GDD_START_DATE.strftime('%Y-%m-%d')} / "
+    "当日の日平均は最新観測時刻までのデータで計算"
+)
 
 fig = go.Figure()
 fig.add_trace(
