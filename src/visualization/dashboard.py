@@ -79,18 +79,37 @@ def load_image_metadata() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def render_image_viewer() -> None:
+def load_observation_at(observed_at: str) -> pd.Series | None:
+    """指定日時の観測データを1件取得"""
+    query = """
+        SELECT observed_at, temperature, road_temperature, wind_speed, cumulative_rainfall, road_condition
+        FROM observations
+        WHERE observed_at = ?
+        LIMIT 1
+    """
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            row_df = pd.read_sql(query, conn, params=[observed_at])
+        if row_df.empty:
+            return None
+        row_df["observed_at"] = pd.to_datetime(row_df["observed_at"], errors="coerce")
+        return row_df.iloc[0]
+    except Exception:
+        return None
+
+
+def render_image_viewer() -> str | None:
     """画像表示（最新・前後移動）"""
     st.subheader("🖼️ 画像プレビュー")
 
     if not DB_PATH.exists():
         st.info("画像DBが見つかりません（outputs/database/delta_station.db）")
-        return
+        return None
 
     image_df = load_image_metadata()
     if image_df.empty:
         st.info("画像メタデータがありません")
-        return
+        return None
 
     current_key = "image_viewer_index"
     if current_key not in st.session_state:
@@ -109,18 +128,8 @@ def render_image_viewer() -> None:
         st.write(f"撮影日時: {row['captured_at']}")
     st.caption(f"画像ファイル: {row['image_filename']}")
 
-    zoom_key = "image_viewer_zoom"
-    if zoom_key not in st.session_state:
-        st.session_state[zoom_key] = False
-    zoom_label = "通常表示に戻す" if st.session_state[zoom_key] else "拡大表示"
-    if st.button(zoom_label, use_container_width=False):
-        st.session_state[zoom_key] = not st.session_state[zoom_key]
-
     if image_path.exists():
-        if st.session_state[zoom_key]:
-            st.image(str(image_path), caption=str(row["image_filename"]), use_container_width=True)
-        else:
-            st.image(str(image_path), caption=str(row["image_filename"]), width=520)
+        st.image(str(image_path), caption=str(row["image_filename"]), width=520)
     else:
         st.warning("画像ファイルが見つかりません（メタデータのみ存在）")
 
@@ -133,6 +142,9 @@ def render_image_viewer() -> None:
             st.session_state[current_key] = max(current_index - 1, 0)
     with nav_meta:
         st.caption(f"{current_index + 1} / {len(image_df)}")
+    if pd.isna(row["observed_at"]):
+        return None
+    return row["observed_at"].strftime("%Y-%m-%d %H:%M")
 
 
 def main():
@@ -161,20 +173,22 @@ def main():
     left_col, right_col = st.columns([1.2, 1.0], gap="large")
 
     with left_col:
-        render_image_viewer()
+        selected_observed_at = render_image_viewer()
 
     with right_col:
+        synced = load_observation_at(selected_observed_at) if selected_observed_at else None
+        current = synced if synced is not None else latest
         st.subheader("📊 最新観測データ")
-        st.caption(f"最新観測日時: {latest['observed_at']}")
+        st.caption(f"表示中の観測日時: {current['observed_at']}")
         col1, col2 = st.columns(2)
         with col1:
-            temp_val = latest['temperature']
+            temp_val = current['temperature']
             if pd.notna(temp_val):
                 st.metric("気温", f"{temp_val:.1f}℃")
             else:
                 st.metric("気温", "N/A")
         with col2:
-            road_temp_val = latest['road_temperature']
+            road_temp_val = current['road_temperature']
             if pd.notna(road_temp_val):
                 st.metric("路面温度", f"{road_temp_val:.1f}℃")
             else:
@@ -182,19 +196,19 @@ def main():
 
         col3, col4 = st.columns(2)
         with col3:
-            wind_val = latest['wind_speed']
+            wind_val = current['wind_speed']
             if pd.notna(wind_val):
                 st.metric("風速", f"{wind_val:.1f}m/s")
             else:
                 st.metric("風速", "N/A")
         with col4:
-            rain_val = latest['cumulative_rainfall']
+            rain_val = current['cumulative_rainfall']
             if pd.notna(rain_val):
                 st.metric("累加雨量", f"{rain_val:.1f}mm")
             else:
                 st.metric("累加雨量", "N/A")
 
-        road_cond = latest['road_condition']
+        road_cond = current['road_condition']
         if pd.notna(road_cond) and road_cond:
             st.info(f"🛣️ **路面状況**: {road_cond}")
     
