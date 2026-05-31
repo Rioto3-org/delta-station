@@ -15,8 +15,8 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: scraper
-              image: delta-station-scraper:latest
-              imagePullPolicy: Never
+              image: localhost:5000/delta-station-scraper:latest
+              imagePullPolicy: Always
               env:
                 - name: TZ
                   value: Asia/Tokyo

@@ -19,8 +19,8 @@ spec:
     spec:
       containers:
         - name: dashboard
-          image: delta-station-dashboard:latest
-          imagePullPolicy: Never
+          image: localhost:5000/delta-station-dashboard:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8501
           env:
