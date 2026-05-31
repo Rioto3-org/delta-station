@@ -1,0 +1,16 @@
+# Traefik v3 対応: IngressRoute 方式（Middleware なし）
+# keda namespace に配置（interceptor と同じ namespace）
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: delta-station-dashboard
+  namespace: keda
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`shine.tail13b717.ts.net`) && PathPrefix(`/delta-station`)
+      kind: Rule
+      services:
+        - name: keda-add-ons-http-interceptor-proxy
+          port: 8080

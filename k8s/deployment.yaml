@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delta-station-dashboard
+  namespace: delta-station
+  labels:
+    app: delta-station-dashboard
+spec:
+  # Scale-to-Zero 運用: KEDA が 0 ↔ 1 を自動制御
+  # 手動で起動したい場合: kubectl scale deployment delta-station-dashboard --replicas=1 -n delta-station
+  replicas: 0
+  selector:
+    matchLabels:
+      app: delta-station-dashboard
+  template:
+    metadata:
+      labels:
+        app: delta-station-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: delta-station-dashboard:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8501
+          env:
+            - name: TZ
+              value: Asia/Tokyo
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: outputs
+              mountPath: /app/outputs
+      volumes:
+        - name: outputs
+          persistentVolumeClaim:
+            claimName: delta-station-outputs
