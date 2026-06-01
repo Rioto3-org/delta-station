@@ -17,6 +17,10 @@ spec:
       labels:
         app: delta-station-dashboard
     spec:
+      securityContext:
+        runAsUser: 1000   # shine
+        runAsGroup: 1000
+        fsGroup: 1000     # PVCのファイルをshineグループ所有にする
       containers:
         - name: dashboard
           image: localhost:5000/delta-station-dashboard:latest
