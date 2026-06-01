@@ -28,4 +28,4 @@ COPY src/visualization/ ./src/visualization/
 RUN mkdir -p /app/outputs/database /app/outputs/images
 
 # Streamlit起動（--server.baseUrlPath でパスプレフィックスを吸収）
-CMD ["uv", "run", "streamlit", "run", "src/visualization/dashboard.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.baseUrlPath", "/delta-station"]
+CMD ["/app/.venv/bin/streamlit", "run", "src/visualization/dashboard.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.baseUrlPath", "/delta-station"]
