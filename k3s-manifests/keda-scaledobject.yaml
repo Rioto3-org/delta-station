@@ -1,0 +1,19 @@
+apiVersion: http.keda.sh/v1alpha1
+kind: HTTPScaledObject
+metadata:
+  name: delta-station-dashboard
+  namespace: delta-station
+spec:
+  hosts:
+    - shine.tail13b717.ts.net
+  pathPrefixes:
+    - /delta-station
+  targetPendingRequests: 100
+  scaledownPeriod: 300           # 5分無アクセスで自動停止
+  scaleTargetRef:
+    name: delta-station-dashboard
+    service: delta-station-dashboard
+    port: 8501
+  replicas:
+    min: 0
+    max: 1

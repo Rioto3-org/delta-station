@@ -42,3 +42,4 @@ uv.lock
 .python-version
 
 ._*
+outputs-k3s

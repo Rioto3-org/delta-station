@@ -29,5 +29,5 @@ COPY database/ ./database/
 # outputs ディレクトリの作成（ボリュームマウントされる）
 RUN mkdir -p /app/outputs/database /app/outputs/images
 
-# スクレイパー実行（15分間隔ループ）
-CMD ["/bin/sh", "-c", "while true; do echo \"[$(date '+%Y-%m-%d %H:%M:%S')] Starting scraper...\"; uv run python -m src.collector.scraper; echo \"[$(date '+%Y-%m-%d %H:%M:%S')] Scraper finished. Sleeping for 15 minutes...\"; sleep 900; done"]
+# スクレイパー実行（1回実行して終了 / k3s CronJobで15分間隔を制御）
+CMD ["/app/.venv/bin/python", "-m", "src.collector.scraper"]

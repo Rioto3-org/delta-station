@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: delta-station-scraper
+  namespace: delta-station
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid        # 前回実行が終わってなければスキップ
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsUser: 1000   # shine
+            runAsGroup: 1000
+            fsGroup: 1000     # PVCのファイルをshineグループ所有にする
+          containers:
+            - name: scraper
+              image: localhost:5000/delta-station-scraper:latest
+              imagePullPolicy: Always
+              env:
+                - name: TZ
+                  value: Asia/Tokyo
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "500m"
+              volumeMounts:
+                - name: outputs
+                  mountPath: /app/outputs
+          volumes:
+            - name: outputs
+              persistentVolumeClaim:
+                claimName: delta-station-outputs

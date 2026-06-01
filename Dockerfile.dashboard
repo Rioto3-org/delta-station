@@ -27,5 +27,5 @@ COPY src/visualization/ ./src/visualization/
 # outputs ディレクトリの作成（ボリュームマウントされる）
 RUN mkdir -p /app/outputs/database /app/outputs/images
 
-# Streamlit起動
-CMD ["uv", "run", "streamlit", "run", "src/visualization/dashboard.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+# Streamlit起動（--server.baseUrlPath でパスプレフィックスを吸収）
+CMD ["/app/.venv/bin/streamlit", "run", "src/visualization/dashboard.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.baseUrlPath", "/delta-station"]
