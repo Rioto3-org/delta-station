@@ -1,0 +1,18 @@
+{
+  "name": "gas-delta-station",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Delta地点観測データのGASスクレイパー（ビルド型 / ローカルテスト可能）",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "node build.mjs",
+    "dry-run": "node scripts/dry-run.mjs",
+    "push": "npm run build && clasp push"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.dry-run-out/
+# clasp のプロジェクト設定（scriptId等）は環境固有のためコミットしない
+.clasp.json
+.clasprc.json
