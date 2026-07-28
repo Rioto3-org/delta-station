@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: delta-station-importer
+  namespace: delta-station
+spec:
+  schedule: "0 3 */2 * *"      # 2日ごと 3:00（GAS側は15分間隔で継続稼働）
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          containers:
+            - name: importer
+              image: localhost:5000/delta-station-scraper:latest   # scraperと同一イメージ（src/collector一式を含む）
+              imagePullPolicy: Always
+              command: ["/app/.venv/bin/python", "-m", "src.collector.importer"]
+              env:
+                - name: TZ
+                  value: Asia/Tokyo
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                - name: GOOGLE_SERVICE_ACCOUNT_FILE
+                  value: /app/secrets/service-account.json
+                # GAS側 gas-delta-station/.clasp.json の parentId と一致させる。
+                # 別スプレッドシートを使う場合のみ上書き:
+                # - name: GAS_SPREADSHEET_ID
+                #   value: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "500m"
+              volumeMounts:
+                - name: outputs
+                  mountPath: /app/outputs
+                - name: gcp-service-account
+                  mountPath: /app/secrets
+                  readOnly: true
+          volumes:
+            - name: outputs
+              persistentVolumeClaim:
+                claimName: delta-station-outputs
+            - name: gcp-service-account
+              secret:
+                secretName: delta-station-gcp-sa

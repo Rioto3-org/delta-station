@@ -33,30 +33,14 @@ make status
 make stop
 ```
 
-### Docker環境で実行（本番運用推奨）
+### 本番運用（k3s + GAS）
+
+スクレイピング自体は[gas-delta-station](gas-delta-station/)（GAS）が15分間隔で実行し、スプレッドシート＋Driveにバッファする。ローカル（k3s）は1〜2日ごとに`make import`相当のCronJobでバッファから取り込むのみで、常時稼働は不要。マニフェストは[k3s-manifests/](k3s-manifests/)を参照。
 
 ```bash
-# 1. Dockerイメージをビルド
-make docker-build
-
-# 2. コンテナを起動（15分間隔で自動実行）
-make docker-start
-
-# 3. ログをリアルタイム確認
-make docker-logs
-
-# 4. コンテナの状態確認
-make docker-status
-
-# 5. コンテナを停止
-make docker-stop
+# GASバッファからDBへ手動取り込み
+make import
 ```
-
-**Docker環境の利点：**
-- 完全な環境再現性（OS、Python、依存関係すべて固定）
-- ホストシステムへの影響なし
-- デプロイが簡単（どこでも同じ環境）
-- 将来的な分析基盤との統合が容易
 
 ## データの利用
 
@@ -128,18 +112,8 @@ delta-station/
 | `make run` | 15分間隔の自動実行を開始 |
 | `make stop` | 自動実行を停止 |
 | `make status` | 実行状態とログを確認 |
-
-### Docker実行コマンド
-
-| コマンド | 説明 |
-|---------|------|
-| `make docker-build` | Dockerイメージをビルド |
-| `make docker-start` | コンテナを起動（15分間隔で自動実行） |
-| `make docker-stop` | コンテナを停止 |
-| `make docker-restart` | コンテナを再起動 |
-| `make docker-logs` | ログをリアルタイム表示 |
-| `make docker-status` | コンテナの状態を確認 |
-| `make docker-clean` | コンテナ・イメージを完全削除 |
+| `make import` | GASバッファ(シート+Drive)からDBへ手動取り込み |
+| `make test-import` | importerの単体テスト |
 
 ## データソース
 
