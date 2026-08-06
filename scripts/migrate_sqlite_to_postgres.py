@@ -63,10 +63,7 @@ def migrate(args: argparse.Namespace) -> tuple[int, int]:
             print("missing_image=" + filename)
         return len(rows), len(missing)
     if missing:
-        raise RuntimeError(
-            f"refusing to migrate: {len(missing)} image files are missing; "
-            f"first_missing={missing[0]}"
-        )
+        print(f"missing_images_skipped={len(missing)}")
 
     inserted = 0
     pg_connect = lambda: psycopg.connect(args.dsn) if args.dsn else psycopg.connect()
@@ -75,9 +72,6 @@ def migrate(args: argparse.Namespace) -> tuple[int, int]:
             for offset in range(0, len(rows), args.batch_size):
                 batch = rows[offset : offset + args.batch_size]
                 for row in batch:
-                    data, mime_type, sha256 = image_payload(
-                        args.images, row["image_filename"]
-                    )
                     cur.execute(
                         """
                         INSERT INTO delta.locations
@@ -97,25 +91,31 @@ def migrate(args: argparse.Namespace) -> tuple[int, int]:
                     )
                     location_id = cur.fetchone()[0]
 
-                    cur.execute(
-                        """
-                        INSERT INTO delta.images
-                            (original_filename, source_url, mime_type, byte_size, sha256, data)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (sha256) DO UPDATE SET
-                            source_url = COALESCE(delta.images.source_url, EXCLUDED.source_url)
-                        RETURNING id
-                        """,
-                        (
-                            row["image_filename"],
-                            row["image_url"],
-                            mime_type,
-                            len(data),
-                            sha256,
-                            data,
-                        ),
-                    )
-                    image_id = cur.fetchone()[0]
+                    image_path = args.images / row["image_filename"]
+                    image_id = None
+                    if image_path.is_file():
+                        data, mime_type, sha256 = image_payload(
+                            args.images, row["image_filename"]
+                        )
+                        cur.execute(
+                            """
+                            INSERT INTO delta.images
+                                (original_filename, source_url, mime_type, byte_size, sha256, data)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (sha256) DO UPDATE SET
+                                source_url = COALESCE(delta.images.source_url, EXCLUDED.source_url)
+                            RETURNING id
+                            """,
+                            (
+                                row["image_filename"],
+                                row["image_url"],
+                                mime_type,
+                                len(data),
+                                sha256,
+                                data,
+                            ),
+                        )
+                        image_id = cur.fetchone()[0]
 
                     cur.execute(
                         """
