@@ -40,7 +40,7 @@ spec:
                 - name: PGPASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: delta-pg-migration
+                      name: delta-pg-worker
                       key: PGPASSWORD
                 # GAS側 gas-delta-station/.clasp.json の parentId と一致させる。
                 # 別スプレッドシートを使う場合のみ上書き:
