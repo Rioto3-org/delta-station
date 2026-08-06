@@ -21,7 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--batch-size", type=int, default=100)
     args = parser.parse_args()
-    if not args.dsn and not os.environ.get("PGHOST"):
+    if not args.dry_run and not args.dsn and not os.environ.get("PGHOST"):
         parser.error("--dsn, DATABASE_URL, or PGHOST is required")
     return args
 
