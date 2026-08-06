@@ -59,8 +59,8 @@ def migrate(args: argparse.Namespace) -> tuple[int, int]:
     if args.dry_run:
         print(f"observations={len(rows)}")
         print(f"missing_images={len(missing)}")
-        if missing:
-            print("first_missing=" + missing[0])
+        for filename in missing:
+            print("missing_image=" + filename)
         return len(rows), len(missing)
     if missing:
         raise RuntimeError(
