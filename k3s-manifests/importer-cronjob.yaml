@@ -4,7 +4,9 @@ metadata:
   name: delta-station-importer
   namespace: delta-station
 spec:
-  schedule: "0 3 */2 * *"      # 2日ごと 3:00（GAS側は15分間隔で継続稼働）
+  schedule: "0 3 * * *"        # 毎日 3:00（GAS側は15分間隔で継続稼働）
+  timeZone: "Asia/Tokyo"
+  suspend: false
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
