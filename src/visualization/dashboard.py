@@ -89,7 +89,7 @@ def load_data(hours: int = 168):
 def load_image_metadata() -> pd.DataFrame:
     """画像メタデータをDBから読み込み"""
     query = """
-        SELECT id, observed_at, captured_at, image_filename,
+        SELECT id, observed_at, captured_at, original_filename AS image_filename,
                image_mime_type, image_byte_size
         FROM delta.observations
         WHERE image_data IS NOT NULL
@@ -103,7 +103,8 @@ def load_image_metadata() -> pd.DataFrame:
         df["observed_at"] = pd.to_datetime(df["observed_at"], errors="coerce")
         df["captured_at"] = pd.to_datetime(df["captured_at"], errors="coerce")
         return df
-    except Exception:
+    except Exception as exc:
+        st.error(f"画像メタデータ読み込みエラー: {exc}")
         return pd.DataFrame()
 
 
