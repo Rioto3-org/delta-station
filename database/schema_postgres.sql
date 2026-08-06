@@ -7,17 +7,6 @@ CREATE TABLE IF NOT EXISTS delta.locations (
     source_url text NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS delta.images (
-    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    original_filename text NOT NULL,
-    source_url text,
-    mime_type text NOT NULL,
-    byte_size integer NOT NULL CHECK (byte_size >= 0),
-    sha256 text NOT NULL UNIQUE,
-    data bytea NOT NULL,
-    created_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS delta.observations (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     location_id bigint NOT NULL REFERENCES delta.locations(id),
@@ -28,9 +17,12 @@ CREATE TABLE IF NOT EXISTS delta.observations (
     wind_speed double precision,
     road_temperature double precision,
     road_condition text,
-    image_id bigint REFERENCES delta.images(id),
     source_image_url text,
     original_filename text NOT NULL,
+    image_data bytea,
+    image_mime_type text,
+    image_byte_size integer CHECK (image_byte_size >= 0),
+    image_sha256 text,
     created_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT observations_location_observed_at_key UNIQUE (location_id, observed_at)
 );
@@ -40,7 +32,6 @@ CREATE INDEX IF NOT EXISTS observations_observed_at_idx
 
 ALTER SCHEMA delta OWNER TO delta_dev;
 ALTER TABLE delta.locations OWNER TO delta_dev;
-ALTER TABLE delta.images OWNER TO delta_dev;
 ALTER TABLE delta.observations OWNER TO delta_dev;
 
 GRANT USAGE ON SCHEMA delta TO delta_worker;

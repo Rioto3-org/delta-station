@@ -92,39 +92,25 @@ def migrate(args: argparse.Namespace) -> tuple[int, int]:
                     location_id = cur.fetchone()[0]
 
                     image_path = args.images / row["image_filename"]
-                    image_id = None
+                    image_data = None
+                    image_mime_type = None
+                    image_byte_size = None
+                    image_sha256 = None
                     if image_path.is_file():
-                        data, mime_type, sha256 = image_payload(
+                        image_data, image_mime_type, image_sha256 = image_payload(
                             args.images, row["image_filename"]
                         )
-                        cur.execute(
-                            """
-                            INSERT INTO delta.images
-                                (original_filename, source_url, mime_type, byte_size, sha256, data)
-                            VALUES (%s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (sha256) DO UPDATE SET
-                                source_url = COALESCE(delta.images.source_url, EXCLUDED.source_url)
-                            RETURNING id
-                            """,
-                            (
-                                row["image_filename"],
-                                row["image_url"],
-                                mime_type,
-                                len(data),
-                                sha256,
-                                data,
-                            ),
-                        )
-                        image_id = cur.fetchone()[0]
+                        image_byte_size = len(image_data)
 
                     cur.execute(
                         """
                         INSERT INTO delta.observations
                             (location_id, observed_at, captured_at,
                              cumulative_rainfall, temperature, wind_speed,
-                             road_temperature, road_condition, image_id,
-                             source_image_url, original_filename, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             road_temperature, road_condition, source_image_url,
+                             original_filename, image_data, image_mime_type,
+                             image_byte_size, image_sha256, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (location_id, observed_at) DO UPDATE SET
                             captured_at = EXCLUDED.captured_at,
                             cumulative_rainfall = EXCLUDED.cumulative_rainfall,
@@ -132,9 +118,12 @@ def migrate(args: argparse.Namespace) -> tuple[int, int]:
                             wind_speed = EXCLUDED.wind_speed,
                             road_temperature = EXCLUDED.road_temperature,
                             road_condition = EXCLUDED.road_condition,
-                            image_id = EXCLUDED.image_id,
                             source_image_url = EXCLUDED.source_image_url,
-                            original_filename = EXCLUDED.original_filename
+                            original_filename = EXCLUDED.original_filename,
+                            image_data = EXCLUDED.image_data,
+                            image_mime_type = EXCLUDED.image_mime_type,
+                            image_byte_size = EXCLUDED.image_byte_size,
+                            image_sha256 = EXCLUDED.image_sha256
                         """,
                         (
                             location_id,
@@ -145,9 +134,12 @@ def migrate(args: argparse.Namespace) -> tuple[int, int]:
                             row["wind_speed"],
                             row["road_temperature"],
                             row["road_condition"],
-                            image_id,
                             row["image_url"],
                             row["image_filename"],
+                            image_data,
+                            image_mime_type,
+                            image_byte_size,
+                            image_sha256,
                             row["created_at"],
                         ),
                     )
@@ -155,7 +147,7 @@ def migrate(args: argparse.Namespace) -> tuple[int, int]:
                 pg_conn.commit()
                 print(f"migrated={min(offset + len(batch), len(rows))}/{len(rows)}")
 
-            for table in ("locations", "images", "observations"):
+            for table in ("locations", "observations"):
                 cur.execute(
                     f"""
                     SELECT setval(
