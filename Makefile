@@ -1,4 +1,4 @@
-.PHONY: help start run stop status import test-import
+.PHONY: help start run stop status import test-import deploy-dashboard deploy-importer run-importer k3s-status dashboard-logs
 
 .DEFAULT_GOAL := help
 
@@ -6,7 +6,7 @@ help: ## このヘルプメッセージを表示
 	@echo "Delta地点 観測データベースシステム"
 	@echo ""
 	@echo "=== ローカル実行（開発用） ==="
-	@grep -E '^(start|run|stop|status|import|test-import):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36mmake %-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(start|run|stop|status|import|test-import|deploy-dashboard|deploy-importer|run-importer|k3s-status|dashboard-logs):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36mmake %-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "本番運用（k3s CronJob）は k3s-manifests/ を参照。"
 
@@ -51,3 +51,22 @@ import: ## [ローカル] GASバッファ(シート+Drive)からDBへ手動取�
 
 test-import: ## [ローカル] importerの単体テスト（Google認証・ネットワーク不要）
 	@uv run pytest tests/test_importer.py -v
+
+# ========================================
+# リモートK3s運用（クライアントからSSHで実行）
+# ========================================
+
+deploy-dashboard: ## [リモート] ローカルのdashboardをSSH経由でビルド・公開
+	@DELTA_REMOTE="$(DELTA_REMOTE)" scripts/remote_k3s.sh deploy-dashboard
+
+deploy-importer: ## [リモート] ローカルのImporterをSSH経由でビルド・適用
+	@DELTA_REMOTE="$(DELTA_REMOTE)" scripts/remote_k3s.sh deploy-importer
+
+run-importer: ## [リモート] Importerを一度だけ実行しログを表示
+	@DELTA_REMOTE="$(DELTA_REMOTE)" scripts/remote_k3s.sh run-importer
+
+k3s-status: ## [リモート] Pod・CronJob・Jobの状態を表示
+	@DELTA_REMOTE="$(DELTA_REMOTE)" scripts/remote_k3s.sh status
+
+dashboard-logs: ## [リモート] 起動中Dashboardのログを追跡
+	@DELTA_REMOTE="$(DELTA_REMOTE)" scripts/remote_k3s.sh logs-dashboard

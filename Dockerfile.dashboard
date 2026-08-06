@@ -22,6 +22,7 @@ COPY pyproject.toml uv.lock* ./
 RUN uv sync --frozen || uv sync
 
 # アプリケーションコードのコピー（dashboardに必要なもののみ）
+COPY src/__init__.py ./src/
 COPY src/visualization/ ./src/visualization/
 
 # outputs ディレクトリの作成（ボリュームマウントされる）
