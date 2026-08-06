@@ -25,6 +25,7 @@ RUN uv sync --frozen || uv sync
 COPY src/__init__.py ./src/
 COPY src/collector/ ./src/collector/
 COPY database/ ./database/
+COPY scripts/ ./scripts/
 
 # outputs ディレクトリの作成（ボリュームマウントされる）
 RUN mkdir -p /app/outputs/database /app/outputs/images
