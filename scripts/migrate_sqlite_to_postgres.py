@@ -21,8 +21,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--batch-size", type=int, default=100)
     args = parser.parse_args()
-    if not args.dsn:
-        parser.error("--dsn or DATABASE_URL is required")
+    if not args.dsn and not os.environ.get("PGHOST"):
+        parser.error("--dsn, DATABASE_URL, or PGHOST is required")
     return args
 
 
@@ -69,7 +69,8 @@ def migrate(args: argparse.Namespace) -> tuple[int, int]:
         )
 
     inserted = 0
-    with psycopg.connect(args.dsn) as pg_conn:
+    pg_connect = lambda: psycopg.connect(args.dsn) if args.dsn else psycopg.connect()
+    with pg_connect() as pg_conn:
         with pg_conn.cursor() as cur:
             for offset in range(0, len(rows), args.batch_size):
                 batch = rows[offset : offset + args.batch_size]
