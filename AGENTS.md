@@ -9,11 +9,12 @@ The active agent is responsible for keeping the project definition, architecture
 ## Current Context
 
 - GAS performs the time-sensitive observation collection.
-- GAS currently buffers observations in Google Sheets and images in Google Drive.
-- K3s runs the Python importer and stores the runtime SQLite database and images on a PVC.
+- GAS collects observations every 15 minutes and buffers rows in Google Sheets and images in Google Drive.
+- K3s runs the PostgreSQL importer once per day and stores the authoritative observations and image bytes in PostgreSQL.
 - The repository working-tree `outputs/` directory is not the same storage as the K3s PVC.
-- The current scope is to redefine the system toward a PostgreSQL-based architecture.
-- Image storage in PostgreSQL (`bytea`) is under consideration; no migration is complete until the data model and operational path are defined.
+- The PostgreSQL migration and manual GAS-to-PostgreSQL import verification are complete.
+- The old SQLite data and Python scraper remain as historical/archive or disabled operational paths.
+- The Streamlit dashboard still reads SQLite and is not yet a PostgreSQL consumer.
 
 ## Documentation Ownership
 

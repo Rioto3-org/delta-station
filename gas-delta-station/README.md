@@ -4,12 +4,12 @@ Delta地点観測データを **Google Apps Script (GAS)** で取得し、スプ
 
 ## なぜGASか（背景）
 
-本体（`delta-station`）はk3s上のCronJobで15分ごとに観測データを取得しているが、**自宅サーバのハード保守（RAM交換など）で停止させると、その間の観測が欠損する**。元画像は固定パス `image/DR-74125-l.jpg` で毎回上書きされ、後から遡って取得できないため、可用性が要求される。
+本体（`delta-station`）の旧Pythonスクレイパーは停止し、現在はGASが15分ごとに観測データを取得する。**自宅サーバのハード保守（RAM交換など）で停止しても観測を継続できる**よう、Sheet/Driveへ一時保存する。
 
-そこで「常時稼働が必要な取得部分」をGoogleのインフラに肩代わりさせ、スプレッドシート/Driveに1ヶ月程度バッファする。Python側は1〜2日ごとのバッチでそこからDBへ取り込む（＝取り込みは自宅サーバが落ちていても後追いできる）。
+そこで「常時稼働が必要な取得部分」をGoogleのインフラに任せ、スプレッドシート/Driveにバッファする。K3s側のPython Importerは毎日1回、そこからPostgreSQLへ取り込む。
 
 - **取得（このプロジェクト / GAS）**: 15分ごと。可用性が要る部分。
-- **取り込み（`delta-station` / Python・別途）**: 低頻度バッチ。冪等（`observed_at` UNIQUE）。
+- **取り込み（`delta-station` / K3s上のPython Importer）**: 毎日1回。PostgreSQLの`(location_id, observed_at)`で冪等。
 
 ## 設計方針：純粋ロジック + アダプタ + ビルド
 
@@ -73,7 +73,7 @@ appendObservation  ── observations シートに1行追記（imported=false�
 
 ## スプレッドシートのスキーマ（Python取り込みとの契約点）
 
-`observations` シートの1行目ヘッダーが、Python側バッチ取り込みとの**契約**。列の並び順ではなく**列名**で取り込むこと（列を足しても壊れないように）。
+`observations` シートの1行目ヘッダーが、K3s側Importerとの**契約**。列の並び順ではなく**列名**で取り込むこと（列を足しても壊れないように）。
 
 | 列 | 説明 | 対応するDBカラム |
 |---|---|---|
@@ -89,7 +89,7 @@ appendObservation  ── observations シートに1行追記（imported=false�
 | `image_url` | 元画像URL | image_url |
 | `location_name` | 地点名 | locations経由 |
 | `created_at` | シート追記時刻 | ― |
-| `imported` | 取り込み済みフラグ | ―（バッチが未取込行だけ拾う） |
+| `imported` | 取り込み済みフラグ | ―（Importerが未取込行だけ拾う） |
 
 ### 日時カラム（observed_at / captured_at）の扱い：Sheets側のフォーマットは信用しない
 
@@ -154,7 +154,7 @@ clasp push        # dist/ を push（.clasp.json の rootDir は "dist" にす�
 1. `.clasp.json` の `rootDir` を `"dist"` に変更（バンドル成果物だけをpushする）。
 2. スクリプトプロパティ `IMAGE_FOLDER_ID` に、画像保存先Driveフォルダのidを設定。
 3. GASエディタで `main` を1回手動実行し、権限（外部リクエスト/スプレッドシート/Drive）を承認。
-4. `setupTrigger` を1回実行し、15分間隔の取得トリガーと、1日1回（3時）のキャッシュ削除（`cleanup`）トリガーを設置。
+4. `setupTrigger` を1回実行し、15分間隔の取得トリガーと、1日1回（3時）のキャッシュ削除（`cleanup`）トリガーを設置する。`cleanup`はImporterが`imported=true`にした行のDrive画像をゴミ箱へ移動し、Sheet行を削除する。
 
 ## 実装メモ（移植時の落とし穴）
 
