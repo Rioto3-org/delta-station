@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS delta.observations (
 CREATE INDEX IF NOT EXISTS observations_observed_at_idx
     ON delta.observations (observed_at DESC);
 
+ALTER SCHEMA delta OWNER TO delta_dev;
+ALTER TABLE delta.locations OWNER TO delta_dev;
+ALTER TABLE delta.images OWNER TO delta_dev;
+ALTER TABLE delta.observations OWNER TO delta_dev;
+
 GRANT USAGE ON SCHEMA delta TO delta_worker;
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA delta TO delta_worker;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA delta TO delta_worker;
