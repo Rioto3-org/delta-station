@@ -14,7 +14,7 @@ The active agent is responsible for keeping the project definition, architecture
 - The repository working-tree `outputs/` directory is not the same storage as the K3s PVC.
 - The PostgreSQL migration and manual GAS-to-PostgreSQL import verification are complete.
 - The old SQLite data and Python scraper remain as historical/archive or disabled operational paths.
-- The Streamlit dashboard still reads SQLite and is not yet a PostgreSQL consumer.
+- The Streamlit dashboard reads PostgreSQL; selected image bytes are loaded on demand.
 
 ## Documentation Ownership
 

@@ -31,6 +31,18 @@ sudo kubectl get cronjob delta-station-importer -n delta-station
 
 GAS側は`gas-delta-station`の手順に従ってビルド・デプロイする。初回またはトリガー再設定時はGASエディタで`setupTrigger`を1回実行する。
 
+## ダッシュボード
+
+ダッシュボードは`delta-pg-worker` Secretを使ってPostgreSQLへ接続する。画像は`observations.image_data`から選択時に取得するため、DeltaのPVCをマウントしない。
+
+```bash
+docker build -f Dockerfile.dashboard \
+  -t localhost:5000/delta-station-dashboard:latest .
+docker push localhost:5000/delta-station-dashboard:latest
+
+sudo kubectl apply -f k3s-manifests/deployment.yaml
+```
+
 ## 旧スクレイパー
 
 `delta-station-scraper` CronJobは停止状態を維持する。GASと旧Pythonスクレイパーを同時に有効化すると、同一地点の二重取得になるためである。

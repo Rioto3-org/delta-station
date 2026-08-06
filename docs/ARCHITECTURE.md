@@ -15,7 +15,7 @@
 | K3s Importer | GASバッファの読み取り、画像取得、PostgreSQL保存 | 実行Pod |
 | PostgreSQL | 観測データと画像の正本 | 永続データ |
 | SQLite | 旧運用データのアーカイブ | 更新しない |
-| Streamlit | 現行では旧SQLiteを読む分析画面 | PostgreSQL対応は未完了 |
+| Streamlit | PostgreSQLの観測値・画像を読む分析画面 | Deploymentで起動 |
 
 GASからPostgreSQLへ直接接続する構成は採用しない。DB認証をGASへ持ち込まず、既存のK3s/Python実行基盤をImporterとして利用する。
 

@@ -35,7 +35,7 @@ PostgreSQL (delta_station)
 - Importer CronJob定義: 毎日03:00 JST（サーバの適用状態は`kubectl`で確認）
 - 旧PythonスクレイパーCronJob: 停止
 - 旧SQLite: PVC上にアーカイブとして保持
-- Streamlitダッシュボード: 現在はSQLite参照のため、PostgreSQL対応は別作業
+- Streamlitダッシュボード: PostgreSQL参照へ切り替え済み
 
 ## 開発
 

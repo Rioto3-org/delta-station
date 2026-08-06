@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """ふきのとう分析ページ（MVP）"""
 
-import sqlite3
-from pathlib import Path
-
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from src.visualization.db import query_dataframe
+
 st.set_page_config(page_title="ふきのとう分析", layout="wide")
 st.title("ふきのとう分析")
 
-DB_PATH = Path(__file__).parent.parent.parent.parent / "outputs" / "database" / "delta_station.db"
 GDD_BASE_TEMP = 0.0
 GDD_START_DATE = pd.Timestamp("2026-02-17")
 GERMINATION_THRESHOLD = 2.5
@@ -23,18 +21,16 @@ GDD_PEAK = 25.0
 @st.cache_data(ttl=60)
 def load_observation_data(hours: int) -> pd.DataFrame:
     """路面温度と気温の時系列を読み込む。"""
-    if not DB_PATH.exists():
-        return pd.DataFrame()
-
     query = f"""
         SELECT observed_at, road_temperature, temperature
-        FROM observations
-        WHERE observed_at >= datetime('now', '-{hours} hours', 'localtime')
+        FROM delta.observations
+        WHERE observed_at >=
+            (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tokyo')
+            - (%s * INTERVAL '1 hour')
           AND road_temperature IS NOT NULL
         ORDER BY observed_at ASC
     """
-    with sqlite3.connect(DB_PATH) as conn:
-        df = pd.read_sql(query, conn)
+    df = query_dataframe(query, (hours,))
     if df.empty:
         return df
 

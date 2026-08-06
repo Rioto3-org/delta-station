@@ -5,13 +5,12 @@ Delta地点 観測ダッシュボード (Streamlit)
 時系列グラフで観測データを可視化。
 """
 
-import sqlite3
-from pathlib import Path
-
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+
+from src.visualization.db import query_dataframe, query_one
 
 # ページ設定
 st.set_page_config(
@@ -57,15 +56,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-DB_PATH = Path(__file__).parent.parent.parent / "outputs" / "database" / "delta_station.db"
-IMAGE_DIR = Path(__file__).parent.parent.parent / "outputs" / "images"
-
-
 @st.cache_data(ttl=60)
 def load_data(hours: int = 168):
     """観測データを読み込み"""
     try:
-        conn = sqlite3.connect(DB_PATH)
         query = f"""
             SELECT 
                 observed_at,
@@ -74,12 +68,13 @@ def load_data(hours: int = 168):
                 wind_speed,
                 cumulative_rainfall,
                 road_condition
-            FROM observations
-            WHERE observed_at >= datetime('now', '-{hours} hours', 'localtime')
+            FROM delta.observations
+            WHERE observed_at >=
+                (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tokyo')
+                - (%s * INTERVAL '1 hour')
             ORDER BY observed_at ASC
         """
-        df = pd.read_sql(query, conn)
-        conn.close()
+        df = query_dataframe(query, (hours,))
         
         if not df.empty:
             df['observed_at'] = pd.to_datetime(df['observed_at'])
@@ -93,24 +88,20 @@ def load_data(hours: int = 168):
 @st.cache_data(ttl=60)
 def load_image_metadata() -> pd.DataFrame:
     """画像メタデータをDBから読み込み"""
-    if not DB_PATH.exists():
-        return pd.DataFrame()
-
     query = """
-        SELECT observed_at, captured_at, image_filename
-        FROM observations
-        WHERE image_filename IS NOT NULL
+        SELECT id, observed_at, captured_at, image_filename,
+               image_mime_type, image_byte_size
+        FROM delta.observations
+        WHERE image_data IS NOT NULL
     """
     query += " ORDER BY observed_at DESC"
 
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            df = pd.read_sql(query, conn)
+        df = query_dataframe(query)
         if df.empty:
             return df
         df["observed_at"] = pd.to_datetime(df["observed_at"], errors="coerce")
         df["captured_at"] = pd.to_datetime(df["captured_at"], errors="coerce")
-        df["image_path"] = df["image_filename"].map(lambda n: IMAGE_DIR / str(n))
         return df
     except Exception:
         return pd.DataFrame()
@@ -120,19 +111,34 @@ def load_observation_at(observed_at: str) -> pd.Series | None:
     """指定日時の観測データを1件取得"""
     query = """
         SELECT observed_at, temperature, road_temperature, wind_speed, cumulative_rainfall, road_condition
-        FROM observations
-        WHERE observed_at = ?
+        FROM delta.observations
+        WHERE observed_at = %s
         LIMIT 1
     """
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            row_df = pd.read_sql(query, conn, params=[observed_at])
+        row_df = query_dataframe(query, (observed_at,))
         if row_df.empty:
             return None
         row_df["observed_at"] = pd.to_datetime(row_df["observed_at"], errors="coerce")
         return row_df.iloc[0]
     except Exception:
         return None
+
+
+@st.cache_data(ttl=60)
+def load_image(image_id: int) -> tuple[bytes, str] | None:
+    """Load one image only when the user selects it."""
+    row = query_one(
+        """
+        SELECT image_data, image_mime_type
+        FROM delta.observations
+        WHERE id = %s AND image_data IS NOT NULL
+        """,
+        (image_id,),
+    )
+    if row is None:
+        return None
+    return bytes(row[0]), row[1] or "image/jpeg"
 
 
 def render_image_viewer(selected_row: pd.Series | None) -> str | None:
@@ -143,14 +149,15 @@ def render_image_viewer(selected_row: pd.Series | None) -> str | None:
         st.info("画像メタデータがありません")
         return None
 
-    image_path = Path(selected_row["image_path"])
     if pd.notna(selected_row["captured_at"]):
         st.write(f"撮影日時: {selected_row['captured_at']}")
 
-    if image_path.exists():
-        st.image(str(image_path), caption=str(selected_row["image_filename"]), width=520)
+    image = load_image(int(selected_row["id"]))
+    if image is not None:
+        image_data, _ = image
+        st.image(image_data, caption=str(selected_row["image_filename"]), width=520)
     else:
-        st.warning("画像ファイルが見つかりません（メタデータのみ存在）")
+        st.warning("画像本体が見つかりません（メタデータのみ存在）")
 
     current_key = "image_viewer_index"
     max_index = int(st.session_state.get("image_viewer_max_index", 0))
@@ -213,10 +220,7 @@ def main():
     left_col, right_col = st.columns([1.2, 1.0], gap="large")
 
     with left_col:
-        if not DB_PATH.exists():
-            st.info("画像DBが見つかりません（outputs/database/delta_station.db）")
-        else:
-            selected_observed_at = render_image_viewer(selected_row)
+        selected_observed_at = render_image_viewer(selected_row)
 
     with right_col:
         synced = load_observation_at(selected_observed_at) if selected_observed_at else None

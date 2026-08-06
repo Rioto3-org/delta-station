@@ -32,6 +32,19 @@ spec:
               value: Asia/Tokyo
             - name: PYTHONUNBUFFERED
               value: "1"
+            - name: PGHOST
+              value: postgres.postgres-operabase.svc.cluster.local
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: delta_station
+            - name: PGUSER
+              value: delta_worker
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: delta-pg-worker
+                  key: PGPASSWORD
           resources:
             requests:
               memory: "256Mi"
@@ -51,10 +64,3 @@ spec:
               port: 8501
             initialDelaySeconds: 30
             periodSeconds: 10
-          volumeMounts:
-            - name: outputs
-              mountPath: /app/outputs
-      volumes:
-        - name: outputs
-          persistentVolumeClaim:
-            claimName: delta-station-outputs
