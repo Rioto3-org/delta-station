@@ -21,7 +21,7 @@ spec:
             - name: importer
               image: localhost:5000/delta-station-scraper:latest   # scraperと同一イメージ（src/collector一式を含む）
               imagePullPolicy: Always
-              command: ["/app/.venv/bin/python", "-m", "src.collector.importer"]
+              command: ["/app/.venv/bin/python", "scripts/import_gas_to_postgres.py"]
               env:
                 - name: TZ
                   value: Asia/Tokyo
@@ -29,6 +29,19 @@ spec:
                   value: "1"
                 - name: GOOGLE_SERVICE_ACCOUNT_FILE
                   value: /app/secrets/service-account.json
+                - name: PGHOST
+                  value: postgres.postgres-operabase.svc.cluster.local
+                - name: PGPORT
+                  value: "5432"
+                - name: PGDATABASE
+                  value: delta_station
+                - name: PGUSER
+                  value: delta_worker
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: delta-pg-migration
+                      key: PGPASSWORD
                 # GAS側 gas-delta-station/.clasp.json の parentId と一致させる。
                 # 別スプレッドシートを使う場合のみ上書き:
                 # - name: GAS_SPREADSHEET_ID
